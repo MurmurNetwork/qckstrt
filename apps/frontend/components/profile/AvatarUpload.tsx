@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
-import { useLazyQuery, useMutation } from "@apollo/client";
+import { useLazyQuery, useMutation } from "@apollo/client/react";
 import { useTranslation } from "react-i18next";
 import Image from "next/image";
 import {
@@ -109,12 +109,11 @@ export function AvatarUpload({
         const storageKey = pathParts.slice(-2).join("/"); // avatars/userId/filename
 
         // Update profile with storage key
-        const { data: updateData, errors: updateErrors } =
-          await updateStorageKey({
-            variables: { storageKey },
-          });
+        const { data: updateData } = await updateStorageKey({
+          variables: { storageKey },
+        });
 
-        if (updateErrors || !updateData?.updateAvatarStorageKey) {
+        if (!updateData?.updateAvatarStorageKey) {
           throw new Error(
             t("profile.avatar.errorSave", "Failed to save avatar"),
           );
