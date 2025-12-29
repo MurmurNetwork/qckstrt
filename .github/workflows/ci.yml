@@ -65,7 +65,7 @@ jobs:
         run: pnpm test:ci
 
       - name: Upload coverage artifacts
-        uses: actions/upload-artifact@6f51ac03b9356f520e9adb1b1b7802705f340c2b # v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v4
         with:
           name: coverage-reports
           path: |
@@ -183,7 +183,7 @@ jobs:
         run: pnpm --filter frontend e2e
 
       - name: Upload Playwright report
-        uses: actions/upload-artifact@6f51ac03b9356f520e9adb1b1b7802705f340c2b # v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v4
         if: ${{ !cancelled() }}
         with:
           name: playwright-report
