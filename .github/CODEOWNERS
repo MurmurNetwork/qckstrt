@@ -1,0 +1,30 @@
+# CODEOWNERS - Defines code ownership for pull request reviews
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default: Repository owner reviews all changes
+* @rodneygagnon
+
+# Platform Core - Requires owner review
+/packages/ @rodneygagnon
+/apps/ @rodneygagnon
+/infra/ @rodneygagnon
+/.github/ @rodneygagnon
+
+# Documentation - Owner review for governance docs
+/docs/ @rodneygagnon
+README.md @rodneygagnon
+CONTRIBUTING.md @rodneygagnon
+CODE_OF_CONDUCT.md @rodneygagnon
+SECURITY.md @rodneygagnon
+LICENSE @rodneygagnon
+
+# Configuration files - Owner review
+package.json @rodneygagnon
+pnpm-workspace.yaml @rodneygagnon
+tsconfig.json @rodneygagnon
+docker-compose.yml @rodneygagnon
+
+# Jurisdictions - Only example/ is in upstream
+# Actual jurisdiction implementations belong in forks, not upstream
+# The pr-validation workflow will block PRs adding other jurisdictions
+/jurisdictions/example/ @rodneygagnon
