@@ -38,6 +38,15 @@
         "tsConfigPath": "src/apps/knowledge/tsconfig.app.json"
       }
     },
+    "region": {
+      "type": "application",
+      "root": "src/apps/region",
+      "entryFile": "main",
+      "sourceRoot": "src/apps/region/src",
+      "compilerOptions": {
+        "tsConfigPath": "src/apps/region/tsconfig.app.json"
+      }
+    },
     "api": {
       "type": "application",
       "root": "src/api",

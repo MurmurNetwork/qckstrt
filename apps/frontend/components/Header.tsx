@@ -22,6 +22,12 @@ export function Header() {
           ) : isAuthenticated && user ? (
             <>
               <Link
+                href="/region"
+                className="text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
+              >
+                Region
+              </Link>
+              <Link
                 href="/settings"
                 className="text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
               >

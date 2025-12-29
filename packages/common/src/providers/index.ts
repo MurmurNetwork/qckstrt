@@ -7,3 +7,4 @@ export * from "./storage/index.js";
 export * from "./auth/index.js";
 export * from "./secrets/index.js";
 export * from "./logging/index.js";
+export * from "./region/index.js";

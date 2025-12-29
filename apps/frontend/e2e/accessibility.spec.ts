@@ -118,8 +118,10 @@ test.describe("Accessibility - Images and Icons", () => {
   test("decorative icons should have aria-hidden", async ({ page }) => {
     await page.goto("/login");
 
-    // Check all SVGs are properly marked as decorative or have accessible labels
-    const svgElements = await page.locator("svg").all();
+    // Check all SVGs in the main content area are properly marked as decorative
+    // Exclude Next.js Dev Tools button which is injected in dev mode
+    const mainContent = page.locator("main");
+    const svgElements = await mainContent.locator("svg").all();
 
     for (const svg of svgElements) {
       const ariaHidden = await svg.getAttribute("aria-hidden");
