@@ -1,4 +1,4 @@
-FROM nginx:1.23.3-alpine
+FROM nginx:1.29.4-alpine
 
 ADD ./nginx/nginx.conf /etc/nginx/nginx.conf
 ADD ./nginx/.certs/localhost.crt /etc/nginx/certs/server.crt
