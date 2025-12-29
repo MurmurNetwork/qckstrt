@@ -31,14 +31,14 @@
   "license": "MIT",
   "dependencies": {
     "@qckstrt/common": "workspace:*",
-    "@supabase/supabase-js": "^2.49.1"
+    "@supabase/supabase-js": "^2.89.0"
   },
   "peerDependencies": {
     "@nestjs/common": "^11.0.0",
     "@nestjs/config": "^4.0.0"
   },
   "devDependencies": {
-    "@nestjs/common": "^11.1.9",
+    "@nestjs/common": "^11.1.10",
     "@nestjs/config": "^4.0.2",
     "@types/jest": "^30.0.0",
     "@types/node": "^22.0.0",

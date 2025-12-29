@@ -36,7 +36,7 @@
     "@nestjs/config": "^4.0.0"
   },
   "devDependencies": {
-    "@nestjs/common": "^11.1.9",
+    "@nestjs/common": "^11.1.10",
     "@nestjs/config": "^4.0.2",
     "@types/jest": "^30.0.0",
     "jest": "^30.0.0",
