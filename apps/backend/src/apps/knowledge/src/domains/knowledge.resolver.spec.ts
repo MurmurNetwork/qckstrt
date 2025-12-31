@@ -8,6 +8,16 @@ describe('KnowledgeResolver', () => {
   let knowledgeResolver: KnowledgeResolver;
   let knowledgeService: KnowledgeService;
 
+  const mockUser = { id: 'user-1', email: 'user@example.com' };
+
+  const mockContext = {
+    req: {
+      headers: {
+        user: JSON.stringify(mockUser),
+      },
+    },
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -29,13 +39,13 @@ describe('KnowledgeResolver', () => {
   });
 
   describe('answerQuery', () => {
-    it('should return answer from knowledge service', async () => {
+    it('should return answer from knowledge service for authenticated user', async () => {
       const mockAnswer = 'This is the answer to your question.';
       knowledgeService.answerQuery = jest.fn().mockResolvedValue(mockAnswer);
 
       const result = await knowledgeResolver.answerQuery(
-        'user-1',
         'What is the topic?',
+        mockContext,
       );
 
       expect(result).toBe(mockAnswer);
@@ -51,13 +61,13 @@ describe('KnowledgeResolver', () => {
         .mockRejectedValue(new Error('Query failed'));
 
       await expect(
-        knowledgeResolver.answerQuery('user-1', 'test query'),
+        knowledgeResolver.answerQuery('test query', mockContext),
       ).rejects.toThrow('Query failed');
     });
   });
 
   describe('searchText', () => {
-    it('should return paginated search results from knowledge service', async () => {
+    it('should return paginated search results for authenticated user', async () => {
       const mockResults = {
         results: [
           { content: 'chunk 1', documentId: 'doc-1', score: 0.95 },
@@ -70,10 +80,10 @@ describe('KnowledgeResolver', () => {
       knowledgeService.searchText = jest.fn().mockResolvedValue(mockResults);
 
       const result = await knowledgeResolver.searchText(
-        'user-1',
         'search term',
         0,
         10,
+        mockContext,
       );
 
       expect(result).toEqual(mockResults);
@@ -94,10 +104,10 @@ describe('KnowledgeResolver', () => {
       knowledgeService.searchText = jest.fn().mockResolvedValue(emptyResults);
 
       const result = await knowledgeResolver.searchText(
-        'user-1',
         'unknown term',
         0,
         10,
+        mockContext,
       );
 
       expect(result).toEqual(emptyResults);
@@ -112,10 +122,10 @@ describe('KnowledgeResolver', () => {
       knowledgeService.searchText = jest.fn().mockResolvedValue(mockResults);
 
       const result = await knowledgeResolver.searchText(
-        'user-1',
         'search term',
         10,
         5,
+        mockContext,
       );
 
       expect(result).toEqual(mockResults);
@@ -129,13 +139,13 @@ describe('KnowledgeResolver', () => {
   });
 
   describe('indexDocument', () => {
-    it('should return true when indexing succeeds', async () => {
+    it('should return true when indexing succeeds for authenticated user', async () => {
       knowledgeService.indexDocument = jest.fn().mockResolvedValue(undefined);
 
       const result = await knowledgeResolver.indexDocument(
-        'user-1',
         'doc-1',
         'Document content',
+        mockContext,
       );
 
       expect(result).toBe(true);
@@ -152,9 +162,9 @@ describe('KnowledgeResolver', () => {
         .mockRejectedValue(new Error('Index failed'));
 
       const result = await knowledgeResolver.indexDocument(
-        'user-1',
         'doc-1',
         'Document content',
+        mockContext,
       );
 
       expect(result).toBe(false);

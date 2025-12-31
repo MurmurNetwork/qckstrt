@@ -1,6 +1,6 @@
 import {
   Args,
-  ID,
+  Context,
   Parent,
   Mutation,
   Query,
@@ -12,8 +12,28 @@ import { User } from './models/user.model';
 import { DocumentsService } from './documents.service';
 import { UseGuards } from '@nestjs/common';
 import { AuthGuard } from 'src/common/guards/auth.guard';
-import { Action } from 'src/common/enums/action.enum';
-import { Permissions } from 'src/common/decorators/permissions.decorator';
+import { UserInputError } from '@nestjs/apollo';
+
+interface GqlContext {
+  req: {
+    headers: {
+      user?: string;
+    };
+  };
+}
+
+interface UserInfo {
+  id: string;
+  email: string;
+}
+
+function getUserFromContext(context: GqlContext): UserInfo {
+  const userHeader = context.req.headers.user;
+  if (!userHeader) {
+    throw new UserInputError('User not authenticated');
+  }
+  return JSON.parse(userHeader) as UserInfo;
+}
 
 /**
  * Documents Resolver
@@ -26,57 +46,39 @@ export class DocumentsResolver {
 
   @Query(() => [File])
   @UseGuards(AuthGuard)
-  @Permissions({
-    action: Action.Read,
-    subject: 'File',
-    conditions: { userId: '{{ userId }}' },
-  })
-  listFiles(
-    @Args({ name: 'userId', type: () => ID }) userId: string,
-  ): Promise<File[]> {
-    return this.documentsService.listFiles(userId);
+  listFiles(@Context() context: GqlContext): Promise<File[]> {
+    const user = getUserFromContext(context);
+    return this.documentsService.listFiles(user.id);
   }
 
   @Query(() => String)
   @UseGuards(AuthGuard)
-  @Permissions({
-    action: Action.Create,
-    subject: 'File',
-    conditions: { userId: '{{ userId }}' },
-  })
   getUploadUrl(
-    @Args({ name: 'userId', type: () => ID }) userId: string,
     @Args('filename') filename: string,
+    @Context() context: GqlContext,
   ): Promise<string> {
-    return this.documentsService.getUploadUrl(userId, filename);
+    const user = getUserFromContext(context);
+    return this.documentsService.getUploadUrl(user.id, filename);
   }
 
   @Query(() => String)
   @UseGuards(AuthGuard)
-  @Permissions({
-    action: Action.Read,
-    subject: 'File',
-    conditions: { userId: '{{ userId }}' },
-  })
   getDownloadUrl(
-    @Args({ name: 'userId', type: () => ID }) userId: string,
     @Args('filename') filename: string,
+    @Context() context: GqlContext,
   ): Promise<string> {
-    return this.documentsService.getDownloadUrl(userId, filename);
+    const user = getUserFromContext(context);
+    return this.documentsService.getDownloadUrl(user.id, filename);
   }
 
   @Mutation(() => Boolean)
   @UseGuards(AuthGuard)
-  @Permissions({
-    action: Action.Delete,
-    subject: 'File',
-    conditions: { userId: '{{ userId }}' },
-  })
   async deleteFile(
-    @Args({ name: 'userId', type: () => ID }) userId: string,
     @Args('filename') filename: string,
+    @Context() context: GqlContext,
   ): Promise<boolean> {
-    return this.documentsService.deleteFile(userId, filename);
+    const user = getUserFromContext(context);
+    return this.documentsService.deleteFile(user.id, filename);
   }
 
   @ResolveField(() => User)

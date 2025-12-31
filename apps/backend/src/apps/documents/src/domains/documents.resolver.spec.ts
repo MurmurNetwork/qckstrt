@@ -10,6 +10,16 @@ describe('DocumentsResolver', () => {
   let documentsResolver: DocumentsResolver;
   let documentsService: DocumentsService;
 
+  const mockUser = { id: 'user-1', email: 'user@example.com' };
+
+  const mockContext = {
+    req: {
+      headers: {
+        user: JSON.stringify(mockUser),
+      },
+    },
+  };
+
   const mockFiles: File[] = [
     {
       userId: 'user-1',
@@ -50,10 +60,10 @@ describe('DocumentsResolver', () => {
   });
 
   describe('listFiles', () => {
-    it('should return list of files for a user', async () => {
+    it('should return list of files for authenticated user', async () => {
       documentsService.listFiles = jest.fn().mockResolvedValue(mockFiles);
 
-      const result = await documentsResolver.listFiles('user-1');
+      const result = await documentsResolver.listFiles(mockContext);
 
       expect(result).toEqual(mockFiles);
       expect(documentsService.listFiles).toHaveBeenCalledWith('user-1');
@@ -62,18 +72,29 @@ describe('DocumentsResolver', () => {
     it('should return empty array when no files found', async () => {
       documentsService.listFiles = jest.fn().mockResolvedValue([]);
 
-      const result = await documentsResolver.listFiles('user-1');
+      const result = await documentsResolver.listFiles(mockContext);
 
       expect(result).toEqual([]);
+    });
+
+    it('should throw error when user not authenticated', () => {
+      const noUserContext = { req: { headers: {} } };
+
+      expect(() => documentsResolver.listFiles(noUserContext)).toThrow(
+        'User not authenticated',
+      );
     });
   });
 
   describe('getUploadUrl', () => {
-    it('should return upload URL', async () => {
+    it('should return upload URL for authenticated user', async () => {
       const mockUrl = 'https://s3.example.com/upload-url';
       documentsService.getUploadUrl = jest.fn().mockResolvedValue(mockUrl);
 
-      const result = await documentsResolver.getUploadUrl('user-1', 'test.pdf');
+      const result = await documentsResolver.getUploadUrl(
+        'test.pdf',
+        mockContext,
+      );
 
       expect(result).toBe(mockUrl);
       expect(documentsService.getUploadUrl).toHaveBeenCalledWith(
@@ -84,13 +105,13 @@ describe('DocumentsResolver', () => {
   });
 
   describe('getDownloadUrl', () => {
-    it('should return download URL', async () => {
+    it('should return download URL for authenticated user', async () => {
       const mockUrl = 'https://s3.example.com/download-url';
       documentsService.getDownloadUrl = jest.fn().mockResolvedValue(mockUrl);
 
       const result = await documentsResolver.getDownloadUrl(
-        'user-1',
         'test.pdf',
+        mockContext,
       );
 
       expect(result).toBe(mockUrl);
@@ -105,7 +126,10 @@ describe('DocumentsResolver', () => {
     it('should return true when file is deleted', async () => {
       documentsService.deleteFile = jest.fn().mockResolvedValue(true);
 
-      const result = await documentsResolver.deleteFile('user-1', 'test.pdf');
+      const result = await documentsResolver.deleteFile(
+        'test.pdf',
+        mockContext,
+      );
 
       expect(result).toBe(true);
       expect(documentsService.deleteFile).toHaveBeenCalledWith(
@@ -117,7 +141,10 @@ describe('DocumentsResolver', () => {
     it('should return false when file deletion fails', async () => {
       documentsService.deleteFile = jest.fn().mockResolvedValue(false);
 
-      const result = await documentsResolver.deleteFile('user-1', 'test.pdf');
+      const result = await documentsResolver.deleteFile(
+        'test.pdf',
+        mockContext,
+      );
 
       expect(result).toBe(false);
     });
