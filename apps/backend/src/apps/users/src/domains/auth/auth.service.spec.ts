@@ -6,6 +6,7 @@ import { createMock } from '@golevelup/ts-jest';
 import { AuthService } from './auth.service';
 
 import { UsersService } from '../user/users.service';
+import { EmailService } from '../email/email.service';
 
 import {
   users,
@@ -21,6 +22,7 @@ describe('AuthService', () => {
   let authService: AuthService;
   let usersService: UsersService;
   let authProvider: IAuthProvider;
+  let emailService: EmailService;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -28,18 +30,21 @@ describe('AuthService', () => {
         AuthService,
         { provide: UsersService, useValue: createMock<UsersService>() },
         { provide: 'AUTH_PROVIDER', useValue: createMock<IAuthProvider>() },
+        { provide: EmailService, useValue: createMock<EmailService>() },
       ],
     }).compile();
 
     authService = module.get<AuthService>(AuthService);
     usersService = module.get<UsersService>(UsersService);
     authProvider = module.get<IAuthProvider>('AUTH_PROVIDER');
+    emailService = module.get<EmailService>(EmailService);
   });
 
   it('services should be defined', () => {
     expect(authService).toBeDefined();
     expect(usersService).toBeDefined();
     expect(authProvider).toBeDefined();
+    expect(emailService).toBeDefined();
   });
 
   it('should register a user', async () => {
@@ -53,12 +58,66 @@ describe('AuthService', () => {
           return Promise.resolve('0919390e-9061-70c5-6a92-2a0b70b204e7');
         },
       );
+    emailService.sendWelcomeEmail = jest.fn().mockResolvedValue(undefined);
 
     expect(await authService.registerUser(registerUserDto)).toEqual(
       '0919390e-9061-70c5-6a92-2a0b70b204e7',
     );
     expect(usersService.findByEmail).toHaveBeenCalledTimes(1);
     expect(authProvider.registerUser).toHaveBeenCalledTimes(1);
+    expect(emailService.sendWelcomeEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it('should register a user with admin flag', async () => {
+    usersService.findByEmail = jest.fn().mockImplementation((email: string) => {
+      return users.find((user) => user.email === email);
+    });
+    authProvider.registerUser = jest
+      .fn()
+      .mockResolvedValue('0919390e-9061-70c5-6a92-2a0b70b204e7');
+    authProvider.addToGroup = jest.fn().mockResolvedValue(true);
+    emailService.sendWelcomeEmail = jest.fn().mockResolvedValue(undefined);
+
+    const adminDto = { ...registerUserDto, admin: true };
+    await authService.registerUser(adminDto);
+
+    expect(authProvider.addToGroup).toHaveBeenCalledWith(
+      adminDto.username,
+      Role.Admin,
+    );
+  });
+
+  it('should register a user with confirm flag', async () => {
+    usersService.findByEmail = jest.fn().mockImplementation((email: string) => {
+      return users.find((user) => user.email === email);
+    });
+    authProvider.registerUser = jest
+      .fn()
+      .mockResolvedValue('0919390e-9061-70c5-6a92-2a0b70b204e7');
+    authProvider.confirmUser = jest.fn().mockResolvedValue(true);
+    emailService.sendWelcomeEmail = jest.fn().mockResolvedValue(undefined);
+
+    const confirmDto = { ...registerUserDto, confirm: true };
+    await authService.registerUser(confirmDto);
+
+    expect(authProvider.confirmUser).toHaveBeenCalledWith(confirmDto.username);
+  });
+
+  it('should handle welcome email failure gracefully', async () => {
+    usersService.findByEmail = jest.fn().mockImplementation((email: string) => {
+      return users.find((user) => user.email === email);
+    });
+    authProvider.registerUser = jest
+      .fn()
+      .mockResolvedValue('0919390e-9061-70c5-6a92-2a0b70b204e7');
+    emailService.sendWelcomeEmail = jest
+      .fn()
+      .mockRejectedValue(new Error('Email service unavailable'));
+
+    // Should not throw, just log warning
+    const result = await authService.registerUser(registerUserDto);
+    expect(result).toEqual('0919390e-9061-70c5-6a92-2a0b70b204e7');
+    expect(emailService.sendWelcomeEmail).toHaveBeenCalled();
   });
 
   it('should fail to register a user', async () => {
@@ -479,6 +538,7 @@ describe('AuthService', () => {
       (authProvider as any).registerWithMagicLink = jest
         .fn()
         .mockResolvedValue(true);
+      emailService.sendWelcomeEmail = jest.fn().mockResolvedValue(undefined);
 
       const result = await authService.registerWithMagicLink(
         'new@example.com',
@@ -493,6 +553,33 @@ describe('AuthService', () => {
         'new@example.com',
         'http://redirect.com',
       );
+      expect(emailService.sendWelcomeEmail).toHaveBeenCalledWith(
+        'new-id',
+        'new@example.com',
+      );
+    });
+
+    it('should handle welcome email failure gracefully in magic link registration', async () => {
+      usersService.findByEmail = jest.fn().mockResolvedValue(null);
+      usersService.createPasswordlessUser = jest.fn().mockResolvedValue({
+        id: 'new-id',
+        email: 'new@example.com',
+      });
+      (authProvider as any).registerWithMagicLink = jest
+        .fn()
+        .mockResolvedValue(true);
+      emailService.sendWelcomeEmail = jest
+        .fn()
+        .mockRejectedValue(new Error('Email failed'));
+
+      // Should not throw, just log warning
+      const result = await authService.registerWithMagicLink(
+        'new@example.com',
+        'http://redirect.com',
+      );
+
+      expect(result).toBe(true);
+      expect(emailService.sendWelcomeEmail).toHaveBeenCalled();
     });
 
     it('should throw error if auth provider does not support magic link registration', async () => {
