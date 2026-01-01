@@ -35,7 +35,11 @@ describe('AuthMiddleware', () => {
     }).compile();
 
     middleware = module.get<AuthMiddleware>(AuthMiddleware);
-    loggerSpy = jest.spyOn((middleware as any).logger, 'log');
+
+    loggerSpy = jest.spyOn(
+      (middleware as unknown as { logger: { log: () => void } }).logger,
+      'log',
+    );
 
     mockRequest = {
       headers: {},
@@ -171,8 +175,12 @@ describe('AuthMiddleware', () => {
       };
 
       (passport.authenticate as jest.Mock).mockImplementation(
-        (strategy, options, callback) => {
-          return (req: Request, res: Response, next: NextFunction) => {
+        (
+          _strategy: string,
+          _options: object,
+          callback: (err: Error | null, user: Express.User | false) => void,
+        ) => {
+          return () => {
             callback(null, mockUser);
           };
         },
@@ -194,8 +202,12 @@ describe('AuthMiddleware', () => {
       };
 
       (passport.authenticate as jest.Mock).mockImplementation(
-        (strategy, options, callback) => {
-          return (req: Request, res: Response, next: NextFunction) => {
+        (
+          _strategy: string,
+          _options: object,
+          callback: (err: Error | null, user: Express.User | false) => void,
+        ) => {
+          return () => {
             callback(null, false);
           };
         },
@@ -221,9 +233,13 @@ describe('AuthMiddleware', () => {
       };
 
       (passport.authenticate as jest.Mock).mockImplementation(
-        (strategy, options, callback) => {
-          return (req: Request, res: Response, next: NextFunction) => {
-            callback(error, null);
+        (
+          _strategy: string,
+          _options: object,
+          callback: (err: Error | null, user: Express.User | false) => void,
+        ) => {
+          return () => {
+            callback(error, false);
           };
         },
       );
