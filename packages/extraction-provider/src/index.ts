@@ -14,6 +14,9 @@ export {
   ExtractionError,
 } from "@qckstrt/common";
 
+// Provider types
+export * from "./types.js";
+
 // Extractor implementations
 export * from "./extractors/url.extractor.js";
 
