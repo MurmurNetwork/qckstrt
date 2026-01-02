@@ -1,4 +1,5 @@
 import { Args, ID, Mutation, Query, Resolver, Context } from '@nestjs/graphql';
+import { ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { LoginUserDto } from './dto/login-user.dto';
 import { RegisterUserDto } from './dto/register-user.dto';
@@ -19,6 +20,10 @@ import {
   GqlContext,
   getUserFromContext,
 } from 'src/common/utils/graphql-context';
+import {
+  setAuthCookies,
+  clearAuthCookies,
+} from 'src/common/utils/cookie.utils';
 
 // Passkey DTOs
 import {
@@ -45,6 +50,7 @@ export class AuthResolver {
     private readonly authService: AuthService,
     private readonly passkeyService: PasskeyService,
     private readonly usersService: UsersService,
+    private readonly configService: ConfigService,
   ) {}
 
   @Public()
@@ -65,10 +71,21 @@ export class AuthResolver {
   @Mutation(() => Auth)
   async loginUser(
     @Args('loginUserDto') loginUserDto: LoginUserDto,
+    @Context() context: GqlContext,
   ): Promise<Auth> {
     let auth: Auth;
     try {
       auth = await this.authService.authenticateUser(loginUserDto);
+
+      // Set httpOnly cookies for browser clients
+      if (context.res) {
+        setAuthCookies(
+          context.res,
+          this.configService,
+          auth.accessToken,
+          auth.refreshToken,
+        );
+      }
     } catch (error) {
       throw new UserInputError(error.message);
     }
@@ -234,6 +251,7 @@ export class AuthResolver {
   @Mutation(() => Auth)
   async verifyPasskeyAuthentication(
     @Args('input') input: VerifyPasskeyAuthenticationDto,
+    @Context() context: GqlContext,
   ): Promise<Auth> {
     try {
       const { verification, user } =
@@ -247,7 +265,19 @@ export class AuthResolver {
       }
 
       // Generate tokens for the authenticated user
-      return this.authService.generateTokensForUser(user);
+      const auth = await this.authService.generateTokensForUser(user);
+
+      // Set httpOnly cookies for browser clients
+      if (context.res) {
+        setAuthCookies(
+          context.res,
+          this.configService,
+          auth.accessToken,
+          auth.refreshToken,
+        );
+      }
+
+      return auth;
     } catch (error) {
       throw new UserInputError(error.message);
     }
@@ -293,9 +323,25 @@ export class AuthResolver {
   @Mutation(() => Auth)
   async verifyMagicLink(
     @Args('input') input: VerifyMagicLinkDto,
+    @Context() context: GqlContext,
   ): Promise<Auth> {
     try {
-      return await this.authService.verifyMagicLink(input.email, input.token);
+      const auth = await this.authService.verifyMagicLink(
+        input.email,
+        input.token,
+      );
+
+      // Set httpOnly cookies for browser clients
+      if (context.res) {
+        setAuthCookies(
+          context.res,
+          this.configService,
+          auth.accessToken,
+          auth.refreshToken,
+        );
+      }
+
+      return auth;
     } catch (error) {
       throw new UserInputError(error.message);
     }
@@ -314,5 +360,18 @@ export class AuthResolver {
     } catch (error) {
       throw new UserInputError(error.message);
     }
+  }
+
+  // ============================================
+  // Logout
+  // ============================================
+
+  @Mutation(() => Boolean)
+  async logout(@Context() context: GqlContext): Promise<boolean> {
+    // Clear httpOnly auth cookies
+    if (context.res) {
+      clearAuthCookies(context.res, this.configService);
+    }
+    return true;
   }
 }

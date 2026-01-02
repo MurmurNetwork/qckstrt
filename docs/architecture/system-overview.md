@@ -197,27 +197,42 @@ interface ILLMProvider {
 
 ### Authentication Flows
 
+**Security Architecture Overview**:
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  Browser                    API Gateway                Microservices    │
+│  ┌──────────┐               ┌──────────┐              ┌──────────────┐  │
+│  │ Frontend │──CSRF+Cookie─▶│ Gateway  │───HMAC sig──▶│ Users/Docs   │  │
+│  │(no       │  (httpOnly)   │(validates│  (gateway    │ (validates   │  │
+│  │ secrets) │               │  CSRF)   │   signs)     │  HMAC)       │  │
+│  └──────────┘               └──────────┘              └──────────────┘  │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
 **Passkey Login** (Primary):
 ```
 1. User clicks "Sign in with Passkey" → Frontend
-2. Frontend requests authentication options → Users Service
+2. Frontend requests authentication options → API Gateway → Users Service
 3. Users Service generates challenge → WebAuthn Challenge DB
 4. User authenticates via biometric/PIN → Browser WebAuthn API
 5. Browser returns signed assertion → Frontend
-6. Frontend sends assertion → Users Service
+6. Frontend sends assertion → API Gateway → Users Service
 7. Users Service verifies signature with stored public key
-8. Returns JWT tokens → Frontend
+8. Users Service sets httpOnly cookies (access + refresh tokens)
+9. API Gateway propagates Set-Cookie headers to browser
+10. Frontend stores user metadata (not tokens) for UI
 ```
 
 **Magic Link Login**:
 ```
 1. User enters email → Frontend
-2. Frontend sends magic link request → Users Service
+2. Frontend sends magic link request → API Gateway → Users Service
 3. Users Service generates OTP → Supabase Auth
 4. Supabase sends email with magic link → User
 5. User clicks link → /auth/callback page
-6. Callback verifies token → Users Service
-7. Returns JWT tokens → Frontend
+6. Callback verifies token → API Gateway → Users Service
+7. Users Service sets httpOnly cookies (access + refresh tokens)
+8. API Gateway propagates Set-Cookie headers to browser
 ```
 
 **Email-First Registration**:
@@ -225,9 +240,31 @@ interface ILLMProvider {
 1. User enters email (no password) → /register page
 2. Magic link sent to verify email → Supabase Auth
 3. User clicks link → Account created → Logged in
-4. Prompt: "Add a passkey for faster sign-in?"
+4. httpOnly cookies set automatically
+5. Prompt: "Add a passkey for faster sign-in?"
    ├── Yes → WebAuthn registration → Passkey saved
    └── Skip → Can add later in settings
+```
+
+**Subsequent Requests** (After Login):
+```
+1. Browser automatically sends httpOnly cookies with each request
+2. Frontend reads CSRF token from non-httpOnly cookie
+3. Frontend includes CSRF token in X-CSRF-Token header
+4. API Gateway validates CSRF token (header matches cookie)
+5. API Gateway extracts user from JWT cookie
+6. API Gateway signs request with HMAC for microservices
+7. Microservices validate HMAC signature
+8. If cookies set by subgraph, gateway propagates to browser
+```
+
+**Logout**:
+```
+1. Frontend calls logout mutation
+2. API Gateway forwards to Users Service
+3. Users Service clears httpOnly cookies via Set-Cookie headers
+4. API Gateway propagates cookie clearing to browser
+5. Frontend clears local user metadata
 ```
 
 ## Configuration Management
@@ -303,18 +340,30 @@ AWS/Cloud Infrastructure
 - LLM inference runs locally
 
 ### Authentication
-- **Passwordless-first** authentication with three methods:
-  - **Passkeys (WebAuthn/FIDO2)** - Primary method using biometric/PIN
-  - **Magic Links** - Email-based passwordless login (like Medium)
-  - **Password** - Legacy fallback for compatibility
+
+**Passwordless-first** authentication with three methods:
+- **Passkeys (WebAuthn/FIDO2)** - Primary method using biometric/PIN
+- **Magic Links** - Email-based passwordless login (like Medium)
+- **Password** - Legacy fallback for compatibility
+
+**Token Security** (Cookie-Based):
+- JWT tokens stored in httpOnly cookies (protected from XSS attacks)
+- CSRF protection via stateless double-submit cookie pattern
+- Frontend sends CSRF token header, backend validates against cookie
+- No secrets or tokens stored in localStorage or accessible to JavaScript
+
+**Gateway-to-Microservice Security** (HMAC):
+- API Gateway signs requests to microservices with HMAC-SHA256
+- Microservices validate `X-HMAC-Auth` header before processing
+- Prevents direct access to microservices bypassing the gateway
+- Cookie propagation through federated GraphQL architecture
+
+**Authorization**:
 - User authentication via Supabase Auth (GoTrue)
-- **HMAC request signing** for API authentication:
-  - Frontend signs requests with `X-HMAC-Auth` header
-  - Supports SHA-256 and SHA-512 algorithms
-  - Prevents request tampering and replay attacks
-- Service-to-service auth via API keys
-- GraphQL field-level authorization
+- GraphQL field-level authorization via CASL
 - Passkey credentials stored in PostgreSQL with counter verification
+
+See [Authentication Security Guide](../guides/auth-security.md) for implementation details.
 
 ### Infrastructure
 - Self-hosted Supabase stack

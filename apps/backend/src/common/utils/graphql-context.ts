@@ -1,4 +1,5 @@
 import { UserInputError } from '@nestjs/apollo';
+import { Response } from 'express';
 import { ILogin } from 'src/interfaces/login.interface';
 
 /**
@@ -21,7 +22,9 @@ export interface GqlContext {
       'user-agent'?: string;
       authorization?: string;
     };
+    cookies?: Record<string, string>;
   };
+  res?: Response;
 }
 
 /**

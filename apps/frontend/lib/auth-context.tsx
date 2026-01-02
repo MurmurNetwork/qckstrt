@@ -21,11 +21,13 @@ import {
   VERIFY_PASSKEY_REGISTRATION,
   GENERATE_PASSKEY_AUTHENTICATION_OPTIONS,
   VERIFY_PASSKEY_AUTHENTICATION,
+  LOGOUT,
   LoginUserInput,
   RegisterUserInput,
   LoginUserData,
   RegisterUserData,
   AuthTokens,
+  LogoutData,
 } from "./graphql/auth";
 import {
   startRegistration,
@@ -73,13 +75,15 @@ interface AuthContextType {
   magicLinkSent: boolean;
 
   // Common
-  logout: () => void;
+  logout: () => Promise<void>;
   clearError: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const TOKEN_KEY = "auth_tokens";
+// SECURITY: Only store user info, NOT tokens
+// Tokens are now stored in httpOnly cookies by the backend
+// @see https://github.com/CommonwealthLabsCode/qckstrt/issues/186
 const USER_KEY = "auth_user";
 
 function decodeToken(idToken: string): User | null {
@@ -148,13 +152,17 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     verifyPasskeyAuthentication: AuthTokens;
   }>(VERIFY_PASSKEY_AUTHENTICATION);
 
-  // Helper to store auth tokens and user
+  // Logout mutation to clear httpOnly cookies
+  const [logoutMutation] = useMutation<LogoutData>(LOGOUT);
+
+  // Helper to store user info after authentication
+  // SECURITY: Tokens are stored in httpOnly cookies by the backend
+  // We only store user metadata in localStorage for UI purposes
   const storeAuth = useCallback((authTokens: AuthTokens) => {
     const decodedUser = decodeToken(authTokens.idToken);
     if (decodedUser) {
-      setTokens(authTokens);
+      setTokens(authTokens); // Keep in memory for backward compatibility
       setUser(decodedUser);
-      localStorage.setItem(TOKEN_KEY, JSON.stringify(authTokens));
       localStorage.setItem(USER_KEY, JSON.stringify(decodedUser));
     }
   }, []);
@@ -174,28 +182,19 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     checkWebAuthnSupport();
   }, []);
 
-  // Load stored auth on mount
+  // Load stored user on mount
+  // SECURITY: We only store user metadata, not tokens
+  // Actual authentication relies on httpOnly cookies
   useEffect(() => {
-    const storedTokens = localStorage.getItem(TOKEN_KEY);
     const storedUser = localStorage.getItem(USER_KEY);
 
-    if (storedTokens && storedUser) {
+    if (storedUser) {
       try {
-        const parsedTokens = JSON.parse(storedTokens) as AuthTokens;
         const parsedUser = JSON.parse(storedUser) as User;
-
-        // Check if token is expired
-        const decoded = jwtDecode<{ exp: number }>(parsedTokens.accessToken);
-        if (decoded.exp * 1000 > Date.now()) {
-          setTokens(parsedTokens);
-          setUser(parsedUser);
-        } else {
-          // Token expired, clear storage
-          localStorage.removeItem(TOKEN_KEY);
-          localStorage.removeItem(USER_KEY);
-        }
+        // Trust the stored user for now - actual auth is validated by httpOnly cookies
+        // on the next API request. If cookies are invalid, user will be redirected to login.
+        setUser(parsedUser);
       } catch {
-        localStorage.removeItem(TOKEN_KEY);
         localStorage.removeItem(USER_KEY);
       }
     }
@@ -218,9 +217,10 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
           const decodedUser = decodeToken(authTokens.idToken);
 
           if (decodedUser) {
-            setTokens(authTokens);
+            setTokens(authTokens); // Keep in memory for backward compatibility
             setUser(decodedUser);
-            localStorage.setItem(TOKEN_KEY, JSON.stringify(authTokens));
+            // SECURITY: Only store user metadata, not tokens
+            // Tokens are in httpOnly cookies set by the backend
             localStorage.setItem(USER_KEY, JSON.stringify(decodedUser));
           }
         }
@@ -474,13 +474,21 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   // Common
   // ============================================
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    // Call backend to clear httpOnly cookies
+    try {
+      await logoutMutation();
+    } catch {
+      // Continue with local cleanup even if backend call fails
+      console.warn("Failed to call logout endpoint");
+    }
+
+    // Clear local state
     setUser(null);
     setTokens(null);
     setMagicLinkSent(false);
-    localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
-  }, []);
+  }, [logoutMutation]);
 
   const clearError = useCallback(() => {
     setError(null);

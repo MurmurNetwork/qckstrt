@@ -1,38 +1,57 @@
 import { ApolloClient, HttpLink, InMemoryCache } from "@apollo/client";
-import { generateHmacHeader } from "./hmac";
 
 const GRAPHQL_URL =
   process.env.NEXT_PUBLIC_GRAPHQL_URL || "http://localhost:3000/api";
 
-// Custom fetch that adds HMAC header for request integrity
-// SECURITY: User authentication is handled via JWT in Authorization header,
-// NOT via a user header which could be spoofed.
+/**
+ * Extract CSRF token from cookie
+ *
+ * The CSRF token is set by the backend on every response as a non-httpOnly cookie,
+ * allowing JavaScript to read it and send it back in the X-CSRF-Token header.
+ */
+function getCsrfToken(): string | undefined {
+  if (typeof document === "undefined") return undefined;
+
+  const cookies = document.cookie.split("; ");
+  const csrfCookie = cookies.find((cookie) => cookie.startsWith("csrf-token="));
+
+  if (csrfCookie) {
+    return decodeURIComponent(csrfCookie.split("=")[1]);
+  }
+
+  return undefined;
+}
+
+/**
+ * Custom fetch that adds CSRF token for request protection
+ *
+ * SECURITY: CSRF tokens protect against cross-site request forgery attacks.
+ * The token is read from a cookie and sent in a header - this works because:
+ * 1. Same-origin policy prevents other sites from reading our cookies
+ * 2. The backend validates that the header matches the cookie
+ *
+ * @see https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html
+ */
 const customFetch: typeof fetch = async (uri, options) => {
-  // Extract path from URL for HMAC signing
-  const url = new URL(
-    GRAPHQL_URL,
-    globalThis.location?.origin || "http://localhost:3200",
-  );
-  const path = url.pathname;
-
-  // Generate HMAC header for request integrity
-  const hmacHeader = await generateHmacHeader("POST", path);
-
-  // Merge headers
   const headers = new Headers(options?.headers as HeadersInit);
-  if (hmacHeader) {
-    headers.set("X-HMAC-Auth", hmacHeader);
+
+  // Add CSRF token from cookie for mutation protection
+  const csrfToken = getCsrfToken();
+  if (csrfToken) {
+    headers.set("X-CSRF-Token", csrfToken);
   }
 
   return fetch(uri, {
     ...options,
     headers,
+    credentials: "include", // Send httpOnly auth cookies
   });
 };
 
 const httpLink = new HttpLink({
   uri: GRAPHQL_URL,
   fetch: customFetch,
+  credentials: "include", // Ensure cookies are sent
 });
 
 export const apolloClient = new ApolloClient({

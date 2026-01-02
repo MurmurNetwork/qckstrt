@@ -213,3 +213,14 @@ export const REGISTER_WITH_MAGIC_LINK = gql`
     registerWithMagicLink(input: $input)
   }
 `;
+
+// Logout mutation to clear httpOnly cookies
+export const LOGOUT = gql`
+  mutation Logout {
+    logout
+  }
+`;
+
+export interface LogoutData {
+  logout: boolean;
+}

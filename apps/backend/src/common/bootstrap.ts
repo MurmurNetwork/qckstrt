@@ -6,6 +6,7 @@ import { Handler } from 'aws-lambda';
 import { CorsOptions } from '@nestjs/common/interfaces/external/cors-options.interface';
 
 import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
 
 import { env } from 'process';
 
@@ -25,7 +26,12 @@ function getCorsConfig(configService: ConfigService): CorsOptions {
     return {
       origin: origins,
       methods: ['GET', 'POST', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+      allowedHeaders: [
+        'Content-Type',
+        'Authorization',
+        'X-Requested-With',
+        'X-CSRF-Token',
+      ],
       credentials: true,
       maxAge: 86400, // 24 hours
     };
@@ -38,9 +44,8 @@ function getCorsConfig(configService: ConfigService): CorsOptions {
     allowedHeaders: [
       'Content-Type',
       'Authorization',
-      'X-HMAC-Auth',
       'X-Requested-With',
-      'user',
+      'X-CSRF-Token',
     ],
     credentials: true,
   };
@@ -85,6 +90,7 @@ export default async function bootstrap(
   const appVersion = configService.get('version');
 
   app.use(helmet());
+  app.use(cookieParser());
   app.enableCors(getCorsConfig(configService));
 
   // Enable global validation for DTOs with class-validator decorators

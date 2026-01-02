@@ -3,9 +3,21 @@ import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { passportJwtSecret } from 'jwks-rsa';
 import { ExtractJwt, Strategy } from 'passport-jwt';
+import { Request } from 'express';
 import { IAuthConfig } from 'src/config';
 
 import { ILogin } from 'src/interfaces/login.interface';
+
+/**
+ * Extract JWT from httpOnly cookie
+ * Used as fallback when Authorization header is not present
+ */
+const extractFromCookie = (req: Request): string | null => {
+  if (req?.cookies?.['access-token']) {
+    return req.cookies['access-token'];
+  }
+  return null;
+};
 
 export const isLoggedIn = (login: unknown): login is ILogin =>
   typeof login === 'object' &&
@@ -30,7 +42,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     const issuer = `https://cognito-idp.${region}.amazonaws.com/${authConfig.userPoolId}`;
 
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      // Extract JWT from Authorization header OR httpOnly cookie
+      // This allows both API clients (header) and browser clients (cookie) to authenticate
+      jwtFromRequest: ExtractJwt.fromExtractors([
+        ExtractJwt.fromAuthHeaderAsBearerToken(),
+        extractFromCookie,
+      ]),
       ignoreExpiration: false,
       audience: authConfig.clientId,
       issuer,

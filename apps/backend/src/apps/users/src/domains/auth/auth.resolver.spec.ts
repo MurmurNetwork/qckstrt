@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { createMock } from '@golevelup/ts-jest';
 
 import { AuthResolver } from './auth.resolver';
@@ -19,6 +20,19 @@ import { LoginUserDto } from './dto/login-user.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { ConfirmForgotPasswordDto } from './dto/confirm-forgot-password.dto';
 import { Role } from 'src/common/enums/role.enum';
+import { GqlContext } from 'src/common/utils/graphql-context';
+
+// Mock context for tests that set cookies
+const createMockContext = (): GqlContext => ({
+  req: {
+    user: undefined,
+    headers: {},
+  },
+  res: {
+    cookie: jest.fn(),
+    clearCookie: jest.fn(),
+  } as any,
+});
 
 describe('AuthResolver', () => {
   let resolver: AuthResolver;
@@ -31,6 +45,7 @@ describe('AuthResolver', () => {
         { provide: AuthService, useValue: createMock<AuthService>() },
         { provide: PasskeyService, useValue: createMock<PasskeyService>() },
         { provide: UsersService, useValue: createMock<UsersService>() },
+        { provide: ConfigService, useValue: createMock<ConfigService>() },
       ],
     }).compile();
 
@@ -84,12 +99,15 @@ describe('AuthResolver', () => {
         });
       });
 
-    expect(await resolver.loginUser(loginUserDto)).toEqual({
+    const mockContext = createMockContext();
+    expect(await resolver.loginUser(loginUserDto, mockContext)).toEqual({
       accessToken: 'qwerty',
       idToken: 'q1w2e3',
       refreshToken: '123456',
     });
     expect(authService.authenticateUser).toHaveBeenCalledTimes(1);
+    // Verify cookies were set
+    expect(mockContext.res?.cookie).toHaveBeenCalled();
   });
 
   it('should fail to log in a user', async () => {
@@ -99,8 +117,9 @@ describe('AuthResolver', () => {
         return Promise.reject(new Error('Failed user login!'));
       });
 
+    const mockContext = createMockContext();
     try {
-      await resolver.loginUser(loginUserDto);
+      await resolver.loginUser(loginUserDto, mockContext);
     } catch (error) {
       expect(error.message).toEqual('Failed user login!');
       expect(authService.authenticateUser).toHaveBeenCalledTimes(1);
@@ -303,6 +322,7 @@ describe('AuthResolver', () => {
           { provide: AuthService, useValue: createMock<AuthService>() },
           { provide: PasskeyService, useValue: createMock<PasskeyService>() },
           { provide: UsersService, useValue: createMock<UsersService>() },
+          { provide: ConfigService, useValue: createMock<ConfigService>() },
         ],
       }).compile();
 
@@ -368,6 +388,7 @@ describe('AuthResolver', () => {
           { provide: AuthService, useValue: createMock<AuthService>() },
           { provide: PasskeyService, useValue: createMock<PasskeyService>() },
           { provide: UsersService, useValue: createMock<UsersService>() },
+          { provide: ConfigService, useValue: createMock<ConfigService>() },
         ],
       }).compile();
 
@@ -439,6 +460,7 @@ describe('AuthResolver', () => {
           { provide: AuthService, useValue: createMock<AuthService>() },
           { provide: PasskeyService, useValue: createMock<PasskeyService>() },
           { provide: UsersService, useValue: createMock<UsersService>() },
+          { provide: ConfigService, useValue: createMock<ConfigService>() },
         ],
       }).compile();
 
@@ -499,6 +521,7 @@ describe('AuthResolver', () => {
           { provide: AuthService, useValue: createMock<AuthService>() },
           { provide: PasskeyService, useValue: createMock<PasskeyService>() },
           { provide: UsersService, useValue: createMock<UsersService>() },
+          { provide: ConfigService, useValue: createMock<ConfigService>() },
         ],
       }).compile();
 
@@ -517,12 +540,18 @@ describe('AuthResolver', () => {
       });
       authService.generateTokensForUser = jest.fn().mockResolvedValue(mockAuth);
 
-      const result = await resolver.verifyPasskeyAuthentication({
-        identifier: 'session-1',
-        response: {} as any,
-      });
+      const mockContext = createMockContext();
+      const result = await resolver.verifyPasskeyAuthentication(
+        {
+          identifier: 'session-1',
+          response: {} as any,
+        },
+        mockContext,
+      );
 
       expect(result).toEqual(mockAuth);
+      // Verify cookies were set
+      expect(mockContext.res?.cookie).toHaveBeenCalled();
     });
 
     it('should throw error when verification fails', async () => {
@@ -531,11 +560,15 @@ describe('AuthResolver', () => {
         user: null,
       });
 
+      const mockContext = createMockContext();
       await expect(
-        resolver.verifyPasskeyAuthentication({
-          identifier: 'session-1',
-          response: {} as any,
-        }),
+        resolver.verifyPasskeyAuthentication(
+          {
+            identifier: 'session-1',
+            response: {} as any,
+          },
+          mockContext,
+        ),
       ).rejects.toThrow('Passkey verification failed');
     });
   });
@@ -550,6 +583,7 @@ describe('AuthResolver', () => {
           { provide: AuthService, useValue: createMock<AuthService>() },
           { provide: PasskeyService, useValue: createMock<PasskeyService>() },
           { provide: UsersService, useValue: createMock<UsersService>() },
+          { provide: ConfigService, useValue: createMock<ConfigService>() },
         ],
       }).compile();
 
@@ -601,6 +635,7 @@ describe('AuthResolver', () => {
           { provide: AuthService, useValue: createMock<AuthService>() },
           { provide: PasskeyService, useValue: createMock<PasskeyService>() },
           { provide: UsersService, useValue: createMock<UsersService>() },
+          { provide: ConfigService, useValue: createMock<ConfigService>() },
         ],
       }).compile();
 
@@ -679,12 +714,18 @@ describe('AuthResolver', () => {
       const mockAuth = { accessToken: 'token', refreshToken: 'refresh' };
       authService.verifyMagicLink = jest.fn().mockResolvedValue(mockAuth);
 
-      const result = await resolver.verifyMagicLink({
-        email: 'test@example.com',
-        token: '123456',
-      });
+      const mockContext = createMockContext();
+      const result = await resolver.verifyMagicLink(
+        {
+          email: 'test@example.com',
+          token: '123456',
+        },
+        mockContext,
+      );
 
       expect(result).toEqual(mockAuth);
+      // Verify cookies were set
+      expect(mockContext.res?.cookie).toHaveBeenCalled();
     });
 
     it('should throw error on failure', async () => {
@@ -692,8 +733,12 @@ describe('AuthResolver', () => {
         .fn()
         .mockRejectedValue(new Error('Verify failed'));
 
+      const mockContext = createMockContext();
       await expect(
-        resolver.verifyMagicLink({ email: 'test@example.com', token: 'bad' }),
+        resolver.verifyMagicLink(
+          { email: 'test@example.com', token: 'bad' },
+          mockContext,
+        ),
       ).rejects.toThrow('Verify failed');
     });
   });
@@ -718,6 +763,30 @@ describe('AuthResolver', () => {
       await expect(
         resolver.registerWithMagicLink({ email: 'new@example.com' }),
       ).rejects.toThrow('Register failed');
+    });
+  });
+
+  // ============================================
+  // Logout Tests
+  // ============================================
+
+  describe('logout', () => {
+    it('should clear cookies on logout', async () => {
+      const mockContext = createMockContext();
+      const result = await resolver.logout(mockContext);
+
+      expect(result).toBe(true);
+      // Verify cookies were cleared
+      expect(mockContext.res?.clearCookie).toHaveBeenCalled();
+    });
+
+    it('should return true even without res object', async () => {
+      const contextWithoutRes = {
+        req: { user: undefined, headers: {} },
+      } as GqlContext;
+      const result = await resolver.logout(contextWithoutRes);
+
+      expect(result).toBe(true);
     });
   });
 });

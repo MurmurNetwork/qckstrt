@@ -30,6 +30,7 @@ import relationaldbConfig from 'src/config/relationaldb.config';
 import emailConfig from 'src/config/email.config';
 
 import { LoggerMiddleware } from 'src/common/middleware/logger.middleware';
+import { HMACMiddleware } from 'src/common/middleware/hmac.middleware';
 import {
   THROTTLER_CONFIG,
   SHARED_PROVIDERS,
@@ -100,7 +101,10 @@ import { CaslModule } from 'src/permissions/casl.module';
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer
-      .apply(LoggerMiddleware)
+      // SECURITY: Validate HMAC signature from API Gateway
+      // Only requests signed by the gateway are accepted
+      // @see https://github.com/CommonwealthLabsCode/qckstrt/issues/185
+      .apply(HMACMiddleware, LoggerMiddleware)
       .forRoutes({ path: '*', method: RequestMethod.ALL });
   }
 }

@@ -50,6 +50,7 @@ const mockGenerateRegOptions = jest.fn();
 const mockVerifyRegMutation = jest.fn();
 const mockGenerateAuthOptions = jest.fn();
 const mockVerifyAuthMutation = jest.fn();
+const mockLogoutMutation = jest.fn();
 
 jest.mock("@apollo/client/react", () => ({
   useMutation: jest.fn((mutation) => {
@@ -73,6 +74,8 @@ jest.mock("@apollo/client/react", () => ({
         return [mockGenerateAuthOptions, { loading: false }];
       case "VerifyPasskeyAuthentication":
         return [mockVerifyAuthMutation, { loading: false }];
+      case "Logout":
+        return [mockLogoutMutation, { loading: false }];
       default:
         return [jest.fn(), { loading: false }];
     }
@@ -461,6 +464,8 @@ describe("AuthProvider", () => {
           },
         },
       });
+      // Mock logout mutation to succeed
+      mockLogoutMutation.mockResolvedValue({ data: { logout: true } });
 
       const { result } = renderHook(() => useAuth(), { wrapper });
 
@@ -477,14 +482,16 @@ describe("AuthProvider", () => {
 
       expect(result.current.isAuthenticated).toBe(true);
 
-      act(() => {
-        result.current.logout();
+      // Logout is now async
+      await act(async () => {
+        await result.current.logout();
       });
 
       expect(result.current.user).toBeNull();
       expect(result.current.tokens).toBeNull();
       expect(result.current.isAuthenticated).toBe(false);
-      expect(localStorageMock.removeItem).toHaveBeenCalledWith("auth_tokens");
+      // SECURITY: We only store user metadata now, not tokens
+      // Tokens are stored in httpOnly cookies by the backend
       expect(localStorageMock.removeItem).toHaveBeenCalledWith("auth_user");
     });
   });
@@ -551,12 +558,11 @@ describe("AuthProvider", () => {
       expect(result.current.user?.email).toBe("test@example.com");
     });
 
-    it("should clear expired stored auth on mount", async () => {
-      const storedTokens = {
-        accessToken: "expired-token",
-        refreshToken: "refresh-token",
-        idToken: "expired-token",
-      };
+    // SECURITY: Token expiry is no longer checked in frontend
+    // We trust stored user metadata and rely on httpOnly cookies for actual auth validation
+    // If cookies are invalid, the next API request will fail and redirect to login
+    // This test now verifies that stored user metadata is restored on mount
+    it("should restore stored user metadata on mount (token validation via httpOnly cookies)", async () => {
       const storedUser = {
         id: "user-123",
         email: "test@example.com",
@@ -564,7 +570,6 @@ describe("AuthProvider", () => {
       };
 
       localStorageMock.getItem.mockImplementation((key: string) => {
-        if (key === "auth_tokens") return JSON.stringify(storedTokens);
         if (key === "auth_user") return JSON.stringify(storedUser);
         return null;
       });
@@ -575,9 +580,10 @@ describe("AuthProvider", () => {
         await new Promise((resolve) => setTimeout(resolve, 0));
       });
 
-      expect(result.current.isAuthenticated).toBe(false);
-      expect(localStorageMock.removeItem).toHaveBeenCalledWith("auth_tokens");
-      expect(localStorageMock.removeItem).toHaveBeenCalledWith("auth_user");
+      // User is considered authenticated based on stored metadata
+      // Actual auth is validated by httpOnly cookies on the next API request
+      expect(result.current.isAuthenticated).toBe(true);
+      expect(result.current.user).toEqual(storedUser);
     });
   });
 });
