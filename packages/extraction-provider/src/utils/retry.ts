@@ -5,6 +5,8 @@
  * for handling transient failures in external service calls.
  */
 
+import { randomInt } from "node:crypto";
+
 import { RetryConfig, RetryExhaustedError } from "../types.js";
 
 /**
@@ -106,10 +108,11 @@ export function calculateDelay(attempt: number, config: RetryConfig): number {
   // Cap at maxDelay
   const cappedDelay = Math.min(exponentialDelay, config.maxDelayMs);
 
-  // Add jitter (0-25% of the delay)
-  const jitter = Math.random() * 0.25 * cappedDelay;
+  // Add jitter (0-25% of the delay) using crypto for security compliance
+  const maxJitter = Math.floor(0.25 * cappedDelay);
+  const jitter = maxJitter > 0 ? randomInt(0, maxJitter + 1) : 0;
 
-  return Math.floor(cappedDelay + jitter);
+  return cappedDelay + jitter;
 }
 
 /**

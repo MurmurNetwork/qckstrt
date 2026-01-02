@@ -152,21 +152,24 @@ describe("retry utility", () => {
   });
 
   describe("calculateDelay", () => {
-    // Mock Math.random for deterministic tests
-    let randomSpy: jest.SpyInstance;
+    // Mock crypto.randomInt for deterministic tests
+    let randomIntMock: jest.SpyInstance;
 
     beforeEach(() => {
-      randomSpy = jest.spyOn(Math, "random").mockReturnValue(0);
+      // Mock randomInt to return 0 (no jitter) by default
+      randomIntMock = jest
+        .spyOn(require("node:crypto"), "randomInt")
+        .mockReturnValue(0);
     });
 
     afterEach(() => {
-      randomSpy.mockRestore();
+      randomIntMock.mockRestore();
     });
 
     it("should calculate exponential backoff", () => {
       const config = { maxAttempts: 5, baseDelayMs: 1000, maxDelayMs: 30000 };
 
-      // With jitter = 0 (random returns 0)
+      // With jitter = 0 (randomInt returns 0)
       expect(calculateDelay(1, config)).toBe(1000); // 1000 * 2^0 = 1000
       expect(calculateDelay(2, config)).toBe(2000); // 1000 * 2^1 = 2000
       expect(calculateDelay(3, config)).toBe(4000); // 1000 * 2^2 = 4000
@@ -184,11 +187,11 @@ describe("retry utility", () => {
     it("should add jitter to delay", () => {
       const config = { maxAttempts: 3, baseDelayMs: 1000, maxDelayMs: 30000 };
 
-      // Set random to return 0.5, which means 12.5% jitter
-      randomSpy.mockReturnValue(0.5);
+      // Mock randomInt to return 125 (half of maxJitter which is 250)
+      randomIntMock.mockReturnValue(125);
 
       const delay = calculateDelay(1, config);
-      // Base delay 1000 + (0.5 * 0.25 * 1000) = 1000 + 125 = 1125
+      // Base delay 1000 + 125 jitter = 1125
       expect(delay).toBe(1125);
     });
 
