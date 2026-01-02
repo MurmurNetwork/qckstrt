@@ -1,6 +1,8 @@
 import { ExecutionContext } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { GqlExecutionContext } from '@nestjs/graphql';
 import { AuthGuard } from './auth.guard';
+import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 
 // Mock GqlExecutionContext
 jest.mock('@nestjs/graphql', () => ({
@@ -11,21 +13,31 @@ jest.mock('@nestjs/graphql', () => ({
 
 describe('AuthGuard', () => {
   let guard: AuthGuard;
+  let mockReflector: Partial<Reflector>;
 
   beforeEach(() => {
-    guard = new AuthGuard();
+    mockReflector = {
+      getAllAndOverride: jest.fn().mockReturnValue(false),
+    };
+    guard = new AuthGuard(mockReflector as Reflector);
     jest.clearAllMocks();
   });
 
-  const createMockContext = (headers: Record<string, string | undefined>) => {
-    const mockRequest = { headers };
+  const createMockContext = (user: unknown) => {
+    const mockRequest = { user };
     const mockGqlContext = {
       getContext: () => ({ req: mockRequest }),
     };
 
     (GqlExecutionContext.create as jest.Mock).mockReturnValue(mockGqlContext);
 
-    return {} as ExecutionContext;
+    // Create a minimal ExecutionContext mock
+    const context = {
+      getHandler: jest.fn(),
+      getClass: jest.fn(),
+    } as unknown as ExecutionContext;
+
+    return context;
   };
 
   it('should be defined', () => {
@@ -33,85 +45,131 @@ describe('AuthGuard', () => {
   });
 
   describe('canActivate', () => {
-    it('should return false when user header is null', async () => {
-      const context = createMockContext({ user: null as unknown as string });
+    describe('public routes', () => {
+      it('should allow access when @Public() decorator is present', async () => {
+        (mockReflector.getAllAndOverride as jest.Mock).mockReturnValue(true);
 
-      const result = await guard.canActivate(context);
+        const context = createMockContext(null);
 
-      expect(result).toBe(false);
+        const result = await guard.canActivate(context);
+
+        expect(result).toBe(true);
+        expect(mockReflector.getAllAndOverride).toHaveBeenCalledWith(
+          IS_PUBLIC_KEY,
+          [context.getHandler(), context.getClass()],
+        );
+      });
     });
 
-    it('should return false when user header is undefined', async () => {
-      const context = createMockContext({ user: undefined });
+    describe('protected routes', () => {
+      it('should return false when user is null', async () => {
+        const context = createMockContext(null);
 
-      const result = await guard.canActivate(context);
+        const result = await guard.canActivate(context);
 
-      expect(result).toBe(false);
-    });
-
-    it('should return false when user header is string "undefined"', async () => {
-      const context = createMockContext({ user: 'undefined' });
-
-      const result = await guard.canActivate(context);
-
-      expect(result).toBe(false);
-    });
-
-    it('should return false when user header is not present', async () => {
-      const context = createMockContext({});
-
-      const result = await guard.canActivate(context);
-
-      expect(result).toBe(false);
-    });
-
-    it('should return true for valid logged in user', async () => {
-      const validUser = JSON.stringify({
-        id: 'user-123',
-        email: 'test@example.com',
-        roles: ['User'],
-        department: 'Engineering',
-        clearance: 'Secret',
+        expect(result).toBe(false);
       });
 
-      const context = createMockContext({ user: validUser });
+      it('should return false when user is undefined', async () => {
+        const context = createMockContext(undefined);
 
-      const result = await guard.canActivate(context);
+        const result = await guard.canActivate(context);
 
-      expect(result).toBe(true);
-    });
-
-    it('should return false for invalid user JSON missing required fields', async () => {
-      const invalidUser = JSON.stringify({
-        id: 'user-123',
-        email: 'test@example.com',
-        // missing roles, department, clearance
+        expect(result).toBe(false);
       });
 
-      const context = createMockContext({ user: invalidUser });
+      it('should return true for valid logged in user', async () => {
+        const validUser = {
+          id: 'user-123',
+          email: 'test@example.com',
+          roles: ['User'],
+          department: 'Engineering',
+          clearance: 'Secret',
+        };
+
+        const context = createMockContext(validUser);
+
+        const result = await guard.canActivate(context);
+
+        expect(result).toBe(true);
+      });
+
+      it('should return false for user missing required fields', async () => {
+        const invalidUser = {
+          id: 'user-123',
+          email: 'test@example.com',
+          // missing roles, department, clearance
+        };
+
+        const context = createMockContext(invalidUser);
+
+        const result = await guard.canActivate(context);
+
+        expect(result).toBe(false);
+      });
+
+      it('should return false for user with only email', async () => {
+        const partialUser = {
+          email: 'test@example.com',
+        };
+
+        const context = createMockContext(partialUser);
+
+        const result = await guard.canActivate(context);
+
+        expect(result).toBe(false);
+      });
+
+      it('should return false for non-object user value', async () => {
+        const context = createMockContext('not-an-object');
+
+        const result = await guard.canActivate(context);
+
+        expect(result).toBe(false);
+      });
+    });
+  });
+
+  describe('security: deny by default', () => {
+    it('should deny access when no user is present on request', async () => {
+      const context = createMockContext(null);
 
       const result = await guard.canActivate(context);
 
       expect(result).toBe(false);
     });
 
-    it('should return false for user with only email', async () => {
-      const partialUser = JSON.stringify({
-        email: 'test@example.com',
-      });
+    it('should use request.user not request.headers.user', async () => {
+      // This test verifies the security fix - we should NOT check headers.user
+      // because that can be spoofed. We only trust request.user set by passport.
+      const mockRequest = {
+        user: null,
+        headers: {
+          // Even if headers.user is set, we should not trust it
+          user: JSON.stringify({
+            id: 'spoofed-user',
+            email: 'spoofed@example.com',
+            roles: ['Admin'],
+            department: 'Engineering',
+            clearance: 'TopSecret',
+          }),
+        },
+      };
 
-      const context = createMockContext({ user: partialUser });
+      const mockGqlContext = {
+        getContext: () => ({ req: mockRequest }),
+      };
+
+      (GqlExecutionContext.create as jest.Mock).mockReturnValue(mockGqlContext);
+
+      const context = {
+        getHandler: jest.fn(),
+        getClass: jest.fn(),
+      } as unknown as ExecutionContext;
 
       const result = await guard.canActivate(context);
 
-      expect(result).toBe(false);
-    });
-
-    it('should return false for malformed JSON in user header', async () => {
-      const context = createMockContext({ user: 'not-valid-json' });
-
-      const result = await guard.canActivate(context);
-
+      // Should deny because request.user is null, ignoring spoofed headers.user
       expect(result).toBe(false);
     });
   });

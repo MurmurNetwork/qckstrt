@@ -4,7 +4,9 @@ import { generateHmacHeader } from "./hmac";
 const GRAPHQL_URL =
   process.env.NEXT_PUBLIC_GRAPHQL_URL || "http://localhost:3000/api";
 
-// Custom fetch that adds HMAC and user headers
+// Custom fetch that adds HMAC header for request integrity
+// SECURITY: User authentication is handled via JWT in Authorization header,
+// NOT via a user header which could be spoofed.
 const customFetch: typeof fetch = async (uri, options) => {
   // Extract path from URL for HMAC signing
   const url = new URL(
@@ -13,22 +15,13 @@ const customFetch: typeof fetch = async (uri, options) => {
   );
   const path = url.pathname;
 
-  // Generate HMAC header
+  // Generate HMAC header for request integrity
   const hmacHeader = await generateHmacHeader("POST", path);
-
-  // Get user from localStorage if available (only in browser)
-  let userJson: string | null = null;
-  if (globalThis.localStorage !== undefined) {
-    userJson = globalThis.localStorage.getItem("user");
-  }
 
   // Merge headers
   const headers = new Headers(options?.headers as HeadersInit);
   if (hmacHeader) {
     headers.set("X-HMAC-Auth", hmacHeader);
-  }
-  if (userJson) {
-    headers.set("user", userJson);
   }
 
   return fetch(uri, {

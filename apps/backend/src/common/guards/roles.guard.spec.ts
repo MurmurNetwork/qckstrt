@@ -4,6 +4,7 @@ import { GqlExecutionContext } from '@nestjs/graphql';
 import { RolesGuard } from './roles.guard';
 import { Role } from '../enums/role.enum';
 import { ROLES_KEY } from '../decorators/roles.decorator';
+import { ILogin } from 'src/interfaces/login.interface';
 
 jest.mock('@nestjs/graphql', () => ({
   GqlExecutionContext: {
@@ -21,15 +22,13 @@ describe('RolesGuard', () => {
     jest.clearAllMocks();
   });
 
+  // SECURITY: Tests now use request.user (set by passport) instead of headers.user (spoofable)
+  // @see https://github.com/CommonwealthLabsCode/qckstrt/issues/183
   const createMockContext = (
-    userHeader: string | null | undefined,
+    user: ILogin | null | undefined,
     requiredRoles: Role[] | undefined = undefined,
   ) => {
-    const mockRequest = {
-      headers: {
-        user: userHeader,
-      },
-    };
+    const mockRequest = { user };
 
     const mockGqlContext = {
       getContext: () => ({ req: mockRequest }),
@@ -68,13 +67,13 @@ describe('RolesGuard', () => {
     });
 
     it('should allow access with valid user when roles array is empty', async () => {
-      const validUser = JSON.stringify({
+      const validUser: ILogin = {
         id: 'user-123',
         email: 'user@example.com',
         roles: [Role.User],
         department: 'Engineering',
         clearance: 'Secret',
-      });
+      };
 
       const context = createMockContext(validUser, []);
 
@@ -87,13 +86,13 @@ describe('RolesGuard', () => {
 
   describe('RBAC enforcement', () => {
     it('should allow access when user has required role', async () => {
-      const validUser = JSON.stringify({
+      const validUser: ILogin = {
         id: 'user-123',
         email: 'admin@example.com',
         roles: [Role.Admin],
         department: 'Engineering',
         clearance: 'Top Secret',
-      });
+      };
 
       const context = createMockContext(validUser, [Role.Admin]);
 
@@ -103,13 +102,13 @@ describe('RolesGuard', () => {
     });
 
     it('should allow access when user has one of multiple required roles', async () => {
-      const validUser = JSON.stringify({
+      const validUser: ILogin = {
         id: 'user-123',
         email: 'user@example.com',
         roles: [Role.User],
         department: 'Engineering',
         clearance: 'Secret',
-      });
+      };
 
       const context = createMockContext(validUser, [Role.Admin, Role.User]);
 
@@ -119,13 +118,13 @@ describe('RolesGuard', () => {
     });
 
     it('should deny access when user lacks required role', async () => {
-      const validUser = JSON.stringify({
+      const validUser: ILogin = {
         id: 'user-123',
         email: 'user@example.com',
         roles: [Role.User],
         department: 'Engineering',
         clearance: 'Secret',
-      });
+      };
 
       const context = createMockContext(validUser, [Role.Admin]);
 
@@ -135,13 +134,13 @@ describe('RolesGuard', () => {
     });
 
     it('should allow access when user has multiple roles including required one', async () => {
-      const validUser = JSON.stringify({
+      const validUser: ILogin = {
         id: 'user-123',
         email: 'admin@example.com',
         roles: [Role.User, Role.Admin],
         department: 'Engineering',
         clearance: 'Top Secret',
-      });
+      };
 
       const context = createMockContext(validUser, [Role.Admin]);
 
@@ -152,7 +151,7 @@ describe('RolesGuard', () => {
   });
 
   describe('unauthorized access rejection', () => {
-    it('should reject when user header is null', async () => {
+    it('should reject when user is null', async () => {
       const context = createMockContext(null, [Role.Admin]);
 
       const result = await guard.canActivate(context);
@@ -160,7 +159,7 @@ describe('RolesGuard', () => {
       expect(result).toBe(false);
     });
 
-    it('should reject when user header is undefined', async () => {
+    it('should reject when user is undefined', async () => {
       const context = createMockContext(undefined, [Role.Admin]);
 
       const result = await guard.canActivate(context);
@@ -168,22 +167,14 @@ describe('RolesGuard', () => {
       expect(result).toBe(false);
     });
 
-    it('should reject when user header is string "undefined"', async () => {
-      const context = createMockContext('undefined', [Role.Admin]);
-
-      const result = await guard.canActivate(context);
-
-      expect(result).toBe(false);
-    });
-
     it('should reject when user has no roles', async () => {
-      const userWithNoRoles = JSON.stringify({
+      const userWithNoRoles: ILogin = {
         id: 'user-123',
         email: 'user@example.com',
         roles: [],
         department: 'Engineering',
         clearance: 'Secret',
-      });
+      };
 
       const context = createMockContext(userWithNoRoles, [Role.Admin]);
 
@@ -192,27 +183,11 @@ describe('RolesGuard', () => {
       expect(result).toBe(false);
     });
 
-    it('should reject when user roles is null', async () => {
-      const userWithNullRoles = JSON.stringify({
-        id: 'user-123',
-        email: 'user@example.com',
-        roles: null,
-        department: 'Engineering',
-        clearance: 'Secret',
-      });
-
-      const context = createMockContext(userWithNullRoles, [Role.Admin]);
-
-      const result = await guard.canActivate(context);
-
-      expect(result).toBe(false);
-    });
-
     it('should reject when user object is missing required login fields', async () => {
-      const incompleteUser = JSON.stringify({
+      const incompleteUser = {
         email: 'user@example.com',
         // missing id, roles, department, clearance
-      });
+      } as ILogin;
 
       const context = createMockContext(incompleteUser, [Role.Admin]);
 
@@ -220,24 +195,17 @@ describe('RolesGuard', () => {
 
       expect(result).toBe(false);
     });
-
-    it('should throw error when user header is invalid JSON', async () => {
-      const context = createMockContext('not-valid-json', [Role.Admin]);
-
-      // The guard throws when JSON.parse fails (no try-catch around it)
-      await expect(guard.canActivate(context)).rejects.toThrow(SyntaxError);
-    });
   });
 
   describe('reflector metadata retrieval', () => {
     it('should retrieve roles from handler and class', async () => {
-      const validUser = JSON.stringify({
+      const validUser: ILogin = {
         id: 'user-123',
         email: 'admin@example.com',
         roles: [Role.Admin],
         department: 'Engineering',
         clearance: 'Top Secret',
-      });
+      };
 
       const context = createMockContext(validUser, [Role.Admin]);
 
@@ -247,6 +215,42 @@ describe('RolesGuard', () => {
         ROLES_KEY,
         expect.any(Array),
       );
+    });
+  });
+
+  describe('security: deny by default', () => {
+    it('should use request.user not request.headers.user', async () => {
+      // This test verifies the security fix - we should NOT check headers.user
+      // because that can be spoofed. We only trust request.user set by passport.
+      const mockRequest = {
+        user: null,
+        headers: {
+          // Even if headers.user is set, we should not trust it
+          user: JSON.stringify({
+            id: 'spoofed-user',
+            email: 'spoofed@example.com',
+            roles: [Role.Admin],
+            department: 'Engineering',
+            clearance: 'TopSecret',
+          }),
+        },
+      };
+
+      const mockGqlContext = {
+        getContext: () => ({ req: mockRequest }),
+        getHandler: () => jest.fn(),
+        getClass: () => jest.fn(),
+      };
+
+      (GqlExecutionContext.create as jest.Mock).mockReturnValue(mockGqlContext);
+      jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue([Role.Admin]);
+
+      const context = {} as ExecutionContext;
+
+      const result = await guard.canActivate(context);
+
+      // Should deny because request.user is null, ignoring spoofed headers.user
+      expect(result).toBe(false);
     });
   });
 });
