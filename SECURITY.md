@@ -80,6 +80,20 @@ See [Authentication Security Guide](docs/guides/auth-security.md) for detailed a
 - Regular dependency updates via Dependabot
 - Automated security scanning in CI/CD
 
+### Security Headers
+
+All services include comprehensive security headers via helmet middleware:
+
+| Header | Protection |
+|--------|------------|
+| X-Frame-Options: DENY | Prevents clickjacking attacks |
+| X-Content-Type-Options: nosniff | Prevents MIME type sniffing |
+| Strict-Transport-Security | Forces HTTPS (1 year, includes subdomains) |
+| X-DNS-Prefetch-Control: off | Prevents DNS prefetch privacy leaks |
+| Referrer-Policy | Controls referrer information leakage |
+| Cross-Origin-Opener-Policy | Isolates browsing context |
+| Cross-Origin-Resource-Policy | Restricts cross-origin resource loading |
+
 ### Code Security
 
 - Input validation on all user inputs

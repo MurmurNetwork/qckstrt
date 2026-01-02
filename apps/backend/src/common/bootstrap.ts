@@ -11,6 +11,7 @@ import cookieParser from 'cookie-parser';
 import { env } from 'process';
 
 import { ConfigService } from '@nestjs/config';
+import { getHelmetOptions } from 'src/config/security-headers.config';
 
 /**
  * Get CORS configuration based on environment
@@ -89,7 +90,9 @@ export default async function bootstrap(
   const appDescription = configService.get('description');
   const appVersion = configService.get('version');
 
-  app.use(helmet());
+  // SECURITY: Configure helmet with comprehensive security headers
+  // @see https://github.com/CommonwealthLabsCode/qckstrt/issues/196
+  app.use(helmet(getHelmetOptions()));
   app.use(cookieParser());
   app.enableCors(getCorsConfig(configService));
 

@@ -162,7 +162,7 @@ importers:
         specifier: ^0.3.2
         version: 0.3.2(graphql@16.12.0)
       helmet:
-        specifier: ^8.0.0
+        specifier: ^8.1.0
         version: 8.1.0
       jwks-rsa:
         specifier: ^3.1.0
