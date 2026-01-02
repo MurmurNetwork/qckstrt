@@ -20,6 +20,9 @@ export * from "./types.js";
 // Cache utilities
 export * from "./cache/index.js";
 
+// Utility functions
+export * from "./utils/index.js";
+
 // Extractor implementations
 export * from "./extractors/url.extractor.js";
 
