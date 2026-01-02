@@ -94,6 +94,33 @@ All services include comprehensive security headers via helmet middleware:
 | Cross-Origin-Opener-Policy | Isolates browsing context |
 | Cross-Origin-Resource-Policy | Restricts cross-origin resource loading |
 
+### Authentication Rate Limiting
+
+All authentication endpoints have strict rate limits to prevent brute force and enumeration attacks:
+
+| Endpoint | Limit | Window | Protection |
+|----------|-------|--------|------------|
+| Login | 5 requests | 1 minute | Brute force prevention |
+| Registration | 3 requests | 1 minute | Account spam prevention |
+| Password Reset | 3 requests | 1 hour | Email bombing prevention |
+| Magic Link | 3 requests | 1 minute | Email bombing prevention |
+| Passkey Auth | 10 requests | 1 minute | WebAuthn rate limiting |
+
+**Account Lockout:**
+- Accounts are locked after **5 failed login attempts**
+- Lockout duration: **15 minutes**
+- All lockout events are logged for security monitoring
+- Lockout clears automatically on successful authentication
+
+**Rate Limit Logging:**
+All rate limit violations are logged with:
+- Client IP address
+- Operation attempted
+- Limit exceeded details
+- Timestamp
+
+See [auth-throttle.config.ts](apps/backend/src/config/auth-throttle.config.ts) for configuration.
+
 ### Code Security
 
 - Input validation on all user inputs
