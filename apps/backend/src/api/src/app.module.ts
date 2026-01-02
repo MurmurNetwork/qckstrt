@@ -29,6 +29,7 @@ import { PassportModule } from '@nestjs/passport';
 import { JwtStrategy } from 'src/common/auth/jwt.strategy';
 import { AuthMiddleware } from 'src/common/middleware/auth.middleware';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { AuthGuard } from 'src/common/guards/auth.guard';
 import { HttpExceptionFilter } from 'src/common/exceptions/http-exception.filter';
 import { HealthModule } from './health/health.module';
 
@@ -36,11 +37,20 @@ interface GatewayContext {
   user?: string;
 }
 
+/**
+ * Extract authenticated user from request context for GraphQL operations.
+ *
+ * SECURITY: Only trusts req.user which is set by AuthMiddleware after JWT validation.
+ * Never trusts req.headers.user as it can be spoofed by clients.
+ *
+ * @see https://github.com/CommonwealthLabsCode/qckstrt/issues/182
+ */
 const handleAuth = ({ req }: { req: Request }) => {
-  // Extract user from header (sent by frontend or from JWT auth)
-  const user = req.headers.user as string | undefined;
-  if (user && user !== 'undefined') {
-    return { user };
+  // Only use the validated user from passport (set by AuthMiddleware after JWT validation)
+  // req.user contains the ILogin object from JwtStrategy.validate()
+  if (req.user) {
+    // Serialize user object to JSON string for propagation to subgraphs
+    return { user: JSON.stringify(req.user) };
   }
   return {};
 };
@@ -100,6 +110,8 @@ const handleAuth = ({ req }: { req: Request }) => {
           cors: true,
           path: 'api',
           context: handleAuth,
+          // SECURITY: Disable introspection in production to prevent schema enumeration attacks
+          introspection: configService.get('NODE_ENV') !== 'production',
         },
         gateway: {
           buildService: ({ url }) => {
@@ -126,6 +138,10 @@ const handleAuth = ({ req }: { req: Request }) => {
   providers: [
     { provide: APP_FILTER, useClass: HttpExceptionFilter },
     { provide: APP_GUARD, useClass: ThrottlerGuard },
+    // SECURITY: Global auth guard implements "deny by default"
+    // All GraphQL operations require authentication unless marked with @Public()
+    // @see https://github.com/CommonwealthLabsCode/qckstrt/issues/183
+    { provide: APP_GUARD, useClass: AuthGuard },
     JwtStrategy,
   ],
 })

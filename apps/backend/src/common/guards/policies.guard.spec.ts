@@ -5,6 +5,7 @@ import { PoliciesGuard } from './policies.guard';
 import { CaslAbilityFactory } from '../../permissions/casl-ability.factory';
 import { Action } from '../enums/action.enum';
 import { Role } from 'src/common/enums/role.enum';
+import { ILogin } from 'src/interfaces/login.interface';
 
 // Mock GqlExecutionContext
 jest.mock('@nestjs/graphql', () => ({
@@ -18,7 +19,7 @@ describe('PoliciesGuard', () => {
   let reflector: Reflector;
   let caslAbilityFactory: CaslAbilityFactory;
 
-  const mockValidUser = {
+  const mockValidUser: ILogin = {
     id: 'user-123',
     email: 'test@example.com',
     roles: [Role.User],
@@ -40,11 +41,13 @@ describe('PoliciesGuard', () => {
     jest.clearAllMocks();
   });
 
+  // SECURITY: Tests now use request.user (set by passport) instead of headers.user (spoofable)
+  // @see https://github.com/CommonwealthLabsCode/qckstrt/issues/183
   const createMockContext = (
-    headers: Record<string, string | undefined>,
+    user: ILogin | null | undefined,
     args: Record<string, unknown> = {},
   ) => {
-    const mockRequest = { headers };
+    const mockRequest = { user };
     const mockGqlContext = {
       getContext: () => ({ req: mockRequest }),
       getHandler: () => jest.fn(),
@@ -64,9 +67,7 @@ describe('PoliciesGuard', () => {
   describe('canActivate', () => {
     it('should return true when no policies are defined', async () => {
       (reflector.getAllAndOverride as jest.Mock).mockReturnValue([]);
-      const context = createMockContext({
-        user: JSON.stringify(mockValidUser),
-      });
+      const context = createMockContext(mockValidUser);
 
       const result = await guard.canActivate(context);
 
@@ -75,31 +76,29 @@ describe('PoliciesGuard', () => {
 
     it('should return true when policies is null/undefined', async () => {
       (reflector.getAllAndOverride as jest.Mock).mockReturnValue(null);
-      const context = createMockContext({
-        user: JSON.stringify(mockValidUser),
-      });
+      const context = createMockContext(mockValidUser);
 
       const result = await guard.canActivate(context);
 
       expect(result).toBe(true);
     });
 
-    it('should return false when user header is null', async () => {
+    it('should return false when user is null', async () => {
       (reflector.getAllAndOverride as jest.Mock).mockReturnValue([
         { action: Action.Read, subject: 'User' },
       ]);
-      const context = createMockContext({ user: null as unknown as string });
+      const context = createMockContext(null);
 
       const result = await guard.canActivate(context);
 
       expect(result).toBe(false);
     });
 
-    it('should return false when user header is undefined string', async () => {
+    it('should return false when user is undefined', async () => {
       (reflector.getAllAndOverride as jest.Mock).mockReturnValue([
         { action: Action.Read, subject: 'User' },
       ]);
-      const context = createMockContext({ user: 'undefined' });
+      const context = createMockContext(undefined);
 
       const result = await guard.canActivate(context);
 
@@ -107,11 +106,11 @@ describe('PoliciesGuard', () => {
     });
 
     it('should return false when user is not logged in (missing required fields)', async () => {
-      const invalidUser = { email: 'test@example.com' }; // missing id, roles, etc.
+      const invalidUser = { email: 'test@example.com' } as ILogin; // missing id, roles, etc.
       (reflector.getAllAndOverride as jest.Mock).mockReturnValue([
         { action: Action.Read, subject: 'User' },
       ]);
-      const context = createMockContext({ user: JSON.stringify(invalidUser) });
+      const context = createMockContext(invalidUser);
 
       const result = await guard.canActivate(context);
 
@@ -130,9 +129,7 @@ describe('PoliciesGuard', () => {
         mockAbility,
       );
 
-      const context = createMockContext({
-        user: JSON.stringify(mockValidUser),
-      });
+      const context = createMockContext(mockValidUser);
 
       const result = await guard.canActivate(context);
 
@@ -153,9 +150,7 @@ describe('PoliciesGuard', () => {
         mockAbility,
       );
 
-      const context = createMockContext({
-        user: JSON.stringify(mockValidUser),
-      });
+      const context = createMockContext(mockValidUser);
 
       const result = await guard.canActivate(context);
 
@@ -178,9 +173,7 @@ describe('PoliciesGuard', () => {
         mockAbility,
       );
 
-      const context = createMockContext({
-        user: JSON.stringify(mockValidUser),
-      });
+      const context = createMockContext(mockValidUser);
 
       const result = await guard.canActivate(context);
 
@@ -208,15 +201,51 @@ describe('PoliciesGuard', () => {
         id: 'user-123',
       });
 
-      const context = createMockContext(
-        { user: JSON.stringify(mockValidUser) },
-        { id: 'user-123' },
-      );
+      const context = createMockContext(mockValidUser, { id: 'user-123' });
 
       const result = await guard.canActivate(context);
 
       expect(result).toBe(true);
       expect(caslAbilityFactory.replacePlaceholders).toHaveBeenCalled();
+    });
+  });
+
+  describe('security: deny by default', () => {
+    it('should use request.user not request.headers.user', async () => {
+      // This test verifies the security fix - we should NOT check headers.user
+      // because that can be spoofed. We only trust request.user set by passport.
+      const mockRequest = {
+        user: null,
+        headers: {
+          // Even if headers.user is set, we should not trust it
+          user: JSON.stringify({
+            id: 'spoofed-user',
+            email: 'spoofed@example.com',
+            roles: ['Admin'],
+            department: 'Engineering',
+            clearance: 'TopSecret',
+          }),
+        },
+      };
+
+      const mockGqlContext = {
+        getContext: () => ({ req: mockRequest }),
+        getHandler: () => jest.fn(),
+        getClass: () => jest.fn(),
+        getArgs: () => ({}),
+      };
+
+      (GqlExecutionContext.create as jest.Mock).mockReturnValue(mockGqlContext);
+      (reflector.getAllAndOverride as jest.Mock).mockReturnValue([
+        { action: Action.Read, subject: 'User' },
+      ]);
+
+      const context = {} as ExecutionContext;
+
+      const result = await guard.canActivate(context);
+
+      // Should deny because request.user is null, ignoring spoofed headers.user
+      expect(result).toBe(false);
     });
   });
 });

@@ -557,6 +557,8 @@ describe('AuthResolver', () => {
       passkeyService = module.get<PasskeyService>(PasskeyService);
     });
 
+    // SECURITY: Tests now use request.user (set by passport) instead of headers.user (spoofable)
+    // @see https://github.com/CommonwealthLabsCode/qckstrt/issues/183
     it('should return user passkeys', async () => {
       const mockCredentials = [{ id: 'cred-1', friendlyName: 'Device 1' }];
       passkeyService.getUserCredentials = jest
@@ -564,17 +566,26 @@ describe('AuthResolver', () => {
         .mockResolvedValue(mockCredentials);
 
       const context = {
-        req: { headers: { user: JSON.stringify({ id: 'user-1' }) } },
+        req: {
+          user: {
+            id: 'user-1',
+            email: 'test@example.com',
+            roles: ['User'],
+            department: 'Engineering',
+            clearance: 'Secret',
+          },
+          headers: {},
+        },
       };
-      const result = await resolver.myPasskeys(context);
+      const result = await resolver.myPasskeys(context as any);
 
       expect(result).toEqual(mockCredentials);
     });
 
     it('should throw error when user not authenticated', async () => {
-      const context = { req: { headers: { user: '' } } };
+      const context = { req: { user: undefined, headers: {} } };
 
-      await expect(resolver.myPasskeys(context)).rejects.toThrow(
+      await expect(resolver.myPasskeys(context as any)).rejects.toThrow(
         'User not authenticated',
       );
     });
@@ -597,13 +608,24 @@ describe('AuthResolver', () => {
       passkeyService = module.get<PasskeyService>(PasskeyService);
     });
 
+    // SECURITY: Tests now use request.user (set by passport) instead of headers.user (spoofable)
+    // @see https://github.com/CommonwealthLabsCode/qckstrt/issues/183
     it('should delete passkey successfully', async () => {
       passkeyService.deleteCredential = jest.fn().mockResolvedValue(true);
 
       const context = {
-        req: { headers: { user: JSON.stringify({ id: 'user-1' }) } },
+        req: {
+          user: {
+            id: 'user-1',
+            email: 'test@example.com',
+            roles: ['User'],
+            department: 'Engineering',
+            clearance: 'Secret',
+          },
+          headers: {},
+        },
       };
-      const result = await resolver.deletePasskey('cred-1', context);
+      const result = await resolver.deletePasskey('cred-1', context as any);
 
       expect(result).toBe(true);
       expect(passkeyService.deleteCredential).toHaveBeenCalledWith(
@@ -613,11 +635,11 @@ describe('AuthResolver', () => {
     });
 
     it('should throw error when user not authenticated', async () => {
-      const context = { req: { headers: { user: '' } } };
+      const context = { req: { user: undefined, headers: {} } };
 
-      await expect(resolver.deletePasskey('cred-1', context)).rejects.toThrow(
-        'User not authenticated',
-      );
+      await expect(
+        resolver.deletePasskey('cred-1', context as any),
+      ).rejects.toThrow('User not authenticated');
     });
   });
 

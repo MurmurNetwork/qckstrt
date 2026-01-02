@@ -6,6 +6,7 @@ import { UserInputError } from '@nestjs/apollo';
 import { ActivityResolver } from './activity.resolver';
 import { ActivityService } from './activity.service';
 import { AuditAction } from 'src/common/enums/audit-action.enum';
+import { ILogin } from 'src/interfaces/login.interface';
 
 describe('ActivityResolver', () => {
   let resolver: ActivityResolver;
@@ -15,11 +16,21 @@ describe('ActivityResolver', () => {
   const mockUserEmail = 'test@example.com';
   const mockSessionToken = 'mock-session-token-123';
 
+  const mockUser: ILogin = {
+    id: mockUserId,
+    email: mockUserEmail,
+    roles: ['User'],
+    department: 'Engineering',
+    clearance: 'Secret',
+  };
+
+  // SECURITY: Tests now use request.user (set by passport) instead of headers.user (spoofable)
+  // @see https://github.com/CommonwealthLabsCode/qckstrt/issues/183
   const mockContext = {
     req: {
       ip: '127.0.0.1',
+      user: mockUser,
       headers: {
-        user: JSON.stringify({ id: mockUserId, email: mockUserEmail }),
         'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X)',
         authorization: `Bearer ${mockSessionToken}`,
       },
@@ -28,15 +39,15 @@ describe('ActivityResolver', () => {
 
   const mockContextNoUser = {
     req: {
+      user: undefined,
       headers: {},
     },
   };
 
   const mockContextNoAuth = {
     req: {
-      headers: {
-        user: JSON.stringify({ id: mockUserId, email: mockUserEmail }),
-      },
+      user: mockUser,
+      headers: {},
     },
   };
 

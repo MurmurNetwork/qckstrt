@@ -1,8 +1,9 @@
-import { UseGuards } from '@nestjs/common';
 import { Resolver, Query, Mutation, Args, Context, ID } from '@nestjs/graphql';
-import { UserInputError } from '@nestjs/apollo';
 
-import { AuthGuard } from 'src/common/guards/auth.guard';
+import {
+  GqlContext,
+  getUserFromContext,
+} from 'src/common/utils/graphql-context';
 
 import { UserProfileEntity } from 'src/db/entities/user-profile.entity';
 import { UserAddressEntity } from 'src/db/entities/user-address.entity';
@@ -23,29 +24,6 @@ import {
 } from './dto/consent.dto';
 import { ProfileCompletionResult } from './models/profile-completion.model';
 
-interface GqlContext {
-  req: {
-    ip?: string;
-    headers: {
-      user?: string;
-      'user-agent'?: string;
-    };
-  };
-}
-
-interface UserHeader {
-  id: string;
-  email: string;
-}
-
-function getUserFromContext(context: GqlContext): UserHeader {
-  const userHeader = context.req.headers.user;
-  if (!userHeader) {
-    throw new UserInputError('User not authenticated');
-  }
-  return JSON.parse(userHeader);
-}
-
 @Resolver()
 export class ProfileResolver {
   constructor(private readonly profileService: ProfileService) {}
@@ -55,7 +33,6 @@ export class ProfileResolver {
   // ============================================
 
   @Query(() => UserProfileEntity, { nullable: true, name: 'myProfile' })
-  @UseGuards(AuthGuard)
   async getMyProfile(
     @Context() context: GqlContext,
   ): Promise<UserProfileEntity | null> {
@@ -64,7 +41,6 @@ export class ProfileResolver {
   }
 
   @Mutation(() => UserProfileEntity)
-  @UseGuards(AuthGuard)
   async updateMyProfile(
     @Args('input') input: UpdateProfileDto,
     @Context() context: GqlContext,
@@ -78,7 +54,6 @@ export class ProfileResolver {
   // ============================================
 
   @Query(() => ProfileCompletionResult, { name: 'myProfileCompletion' })
-  @UseGuards(AuthGuard)
   async getMyProfileCompletion(
     @Context() context: GqlContext,
   ): Promise<ProfileCompletionResult> {
@@ -91,7 +66,6 @@ export class ProfileResolver {
   // ============================================
 
   @Query(() => String, { name: 'avatarUploadUrl' })
-  @UseGuards(AuthGuard)
   async getAvatarUploadUrl(
     @Args('filename') filename: string,
     @Context() context: GqlContext,
@@ -101,7 +75,6 @@ export class ProfileResolver {
   }
 
   @Mutation(() => UserProfileEntity)
-  @UseGuards(AuthGuard)
   async updateAvatarStorageKey(
     @Args('storageKey') storageKey: string,
     @Context() context: GqlContext,
@@ -115,7 +88,6 @@ export class ProfileResolver {
   // ============================================
 
   @Query(() => [UserAddressEntity], { name: 'myAddresses' })
-  @UseGuards(AuthGuard)
   async getMyAddresses(
     @Context() context: GqlContext,
   ): Promise<UserAddressEntity[]> {
@@ -124,7 +96,6 @@ export class ProfileResolver {
   }
 
   @Query(() => UserAddressEntity, { nullable: true, name: 'myAddress' })
-  @UseGuards(AuthGuard)
   async getMyAddress(
     @Args('id', { type: () => ID }) id: string,
     @Context() context: GqlContext,
@@ -134,7 +105,6 @@ export class ProfileResolver {
   }
 
   @Mutation(() => UserAddressEntity)
-  @UseGuards(AuthGuard)
   async createAddress(
     @Args('input') input: CreateAddressDto,
     @Context() context: GqlContext,
@@ -144,7 +114,6 @@ export class ProfileResolver {
   }
 
   @Mutation(() => UserAddressEntity)
-  @UseGuards(AuthGuard)
   async updateAddress(
     @Args('input') input: UpdateAddressDto,
     @Context() context: GqlContext,
@@ -154,7 +123,6 @@ export class ProfileResolver {
   }
 
   @Mutation(() => Boolean)
-  @UseGuards(AuthGuard)
   async deleteAddress(
     @Args('id', { type: () => ID }) id: string,
     @Context() context: GqlContext,
@@ -164,7 +132,6 @@ export class ProfileResolver {
   }
 
   @Mutation(() => UserAddressEntity)
-  @UseGuards(AuthGuard)
   async setPrimaryAddress(
     @Args('id', { type: () => ID }) id: string,
     @Context() context: GqlContext,
@@ -181,7 +148,6 @@ export class ProfileResolver {
     nullable: true,
     name: 'myNotificationPreferences',
   })
-  @UseGuards(AuthGuard)
   async getMyNotificationPreferences(
     @Context() context: GqlContext,
   ): Promise<NotificationPreferenceEntity | null> {
@@ -190,7 +156,6 @@ export class ProfileResolver {
   }
 
   @Mutation(() => NotificationPreferenceEntity)
-  @UseGuards(AuthGuard)
   async updateNotificationPreferences(
     @Args('input') input: UpdateNotificationPreferencesDto,
     @Context() context: GqlContext,
@@ -200,7 +165,6 @@ export class ProfileResolver {
   }
 
   @Mutation(() => NotificationPreferenceEntity)
-  @UseGuards(AuthGuard)
   async unsubscribeFromAll(
     @Context() context: GqlContext,
   ): Promise<NotificationPreferenceEntity> {
@@ -213,7 +177,6 @@ export class ProfileResolver {
   // ============================================
 
   @Query(() => [UserConsentEntity], { name: 'myConsents' })
-  @UseGuards(AuthGuard)
   async getMyConsents(
     @Context() context: GqlContext,
   ): Promise<UserConsentEntity[]> {
@@ -222,7 +185,6 @@ export class ProfileResolver {
   }
 
   @Query(() => UserConsentEntity, { nullable: true, name: 'myConsent' })
-  @UseGuards(AuthGuard)
   async getMyConsent(
     @Args('consentType', { type: () => ConsentType }) consentType: ConsentType,
     @Context() context: GqlContext,
@@ -232,7 +194,6 @@ export class ProfileResolver {
   }
 
   @Mutation(() => UserConsentEntity)
-  @UseGuards(AuthGuard)
   async updateConsent(
     @Args('input') input: UpdateConsentDto,
     @Context() context: GqlContext,
@@ -247,7 +208,6 @@ export class ProfileResolver {
   }
 
   @Mutation(() => [UserConsentEntity])
-  @UseGuards(AuthGuard)
   async bulkUpdateConsents(
     @Args('input') input: BulkUpdateConsentsDto,
     @Context() context: GqlContext,
@@ -266,7 +226,6 @@ export class ProfileResolver {
   }
 
   @Mutation(() => UserConsentEntity)
-  @UseGuards(AuthGuard)
   async withdrawConsent(
     @Args('input') input: WithdrawConsentDto,
     @Context() context: GqlContext,
@@ -284,7 +243,6 @@ export class ProfileResolver {
   }
 
   @Query(() => Boolean)
-  @UseGuards(AuthGuard)
   async hasValidConsent(
     @Args('consentType', { type: () => ConsentType }) consentType: ConsentType,
     @Context() context: GqlContext,

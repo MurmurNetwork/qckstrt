@@ -10,7 +10,7 @@ import { isLoggedIn } from 'src/common/auth/jwt.strategy';
 
 @Injectable()
 export class RolesGuard implements CanActivate {
-  constructor(private reflector: Reflector) {}
+  constructor(private readonly reflector: Reflector) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const ctx = GqlExecutionContext.create(context);
@@ -25,13 +25,12 @@ export class RolesGuard implements CanActivate {
       return true;
     }
 
-    if (
-      request.headers.user != null &&
-      request.headers.user !== 'undefined' &&
-      isLoggedIn(JSON.parse(request.headers.user))
-    ) {
-      const user: ILogin = JSON.parse(request.headers.user);
+    // SECURITY: Use request.user set by AuthMiddleware after JWT validation
+    // Never trust request.headers.user as it can be spoofed
+    // @see https://github.com/CommonwealthLabsCode/qckstrt/issues/183
+    const user: ILogin | undefined = request.user;
 
+    if (user && isLoggedIn(user)) {
       return requiredRoles.some((role) => user.roles?.includes(role));
     }
 

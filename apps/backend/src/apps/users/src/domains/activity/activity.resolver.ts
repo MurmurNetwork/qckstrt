@@ -1,4 +1,3 @@
-import { UseGuards } from '@nestjs/common';
 import {
   Resolver,
   Query,
@@ -8,9 +7,12 @@ import {
   Int,
   ID,
 } from '@nestjs/graphql';
-import { UserInputError } from '@nestjs/apollo';
 
-import { AuthGuard } from 'src/common/guards/auth.guard';
+import {
+  GqlContext,
+  getUserFromContext,
+  getSessionTokenFromContext,
+} from 'src/common/utils/graphql-context';
 
 import { ActivityService } from './activity.service';
 import {
@@ -21,39 +23,6 @@ import {
   ActivitySummary,
 } from './dto/activity.dto';
 
-interface GqlContext {
-  req: {
-    ip?: string;
-    headers: {
-      user?: string;
-      'user-agent'?: string;
-      authorization?: string;
-    };
-  };
-}
-
-interface UserHeader {
-  id: string;
-  email: string;
-}
-
-function getUserFromContext(context: GqlContext): UserHeader {
-  const userHeader = context.req.headers.user;
-  if (!userHeader) {
-    throw new UserInputError('User not authenticated');
-  }
-  return JSON.parse(userHeader);
-}
-
-function getSessionTokenFromContext(context: GqlContext): string | undefined {
-  const auth = context.req.headers.authorization;
-  if (!auth) {
-    return undefined;
-  }
-  // Extract token from "Bearer <token>"
-  return auth.replace(/^Bearer\s+/i, '');
-}
-
 @Resolver()
 export class ActivityResolver {
   constructor(private readonly activityService: ActivityService) {}
@@ -63,7 +32,6 @@ export class ActivityResolver {
   // ============================================
 
   @Query(() => ActivityLogPage, { name: 'myActivityLog' })
-  @UseGuards(AuthGuard)
   async getMyActivityLog(
     @Args('limit', { type: () => Int, defaultValue: 20 }) limit: number,
     @Args('offset', { type: () => Int, defaultValue: 0 }) offset: number,
@@ -75,7 +43,6 @@ export class ActivityResolver {
   }
 
   @Query(() => ActivitySummary, { name: 'myActivitySummary' })
-  @UseGuards(AuthGuard)
   async getMyActivitySummary(
     @Context() context: GqlContext,
   ): Promise<ActivitySummary> {
@@ -88,7 +55,6 @@ export class ActivityResolver {
   // ============================================
 
   @Query(() => SessionsPage, { name: 'mySessions' })
-  @UseGuards(AuthGuard)
   async getMySessions(
     @Args('includeRevoked', { type: () => Boolean, defaultValue: false })
     includeRevoked: boolean,
@@ -104,7 +70,6 @@ export class ActivityResolver {
   }
 
   @Query(() => SessionInfo, { nullable: true, name: 'mySession' })
-  @UseGuards(AuthGuard)
   async getMySession(
     @Args('id', { type: () => ID }) id: string,
     @Context() context: GqlContext,
@@ -115,7 +80,6 @@ export class ActivityResolver {
   }
 
   @Mutation(() => Boolean)
-  @UseGuards(AuthGuard)
   async revokeSession(
     @Args('id', { type: () => ID }) id: string,
     @Context() context: GqlContext,
@@ -125,7 +89,6 @@ export class ActivityResolver {
   }
 
   @Mutation(() => Int, { description: 'Revoke all sessions except current' })
-  @UseGuards(AuthGuard)
   async revokeAllOtherSessions(
     @Context() context: GqlContext,
   ): Promise<number> {

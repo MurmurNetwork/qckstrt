@@ -5,17 +5,20 @@ import { RegisterUserDto } from './dto/register-user.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 
 import { UserInputError } from '@nestjs/apollo';
-import { UseGuards } from '@nestjs/common';
-import { AuthGuard } from 'src/common/guards/auth.guard';
 
 import { Auth } from './models/auth.model';
 import { Permissions } from 'src/common/decorators/permissions.decorator';
+import { Public } from 'src/common/decorators/public.decorator';
 import { Role } from 'src/common/enums/role.enum';
 import { AuthStrategy } from 'src/common/enums/auth-strategy.enum';
 import { Roles } from 'src/common/decorators/roles.decorator';
 import { Action } from 'src/common/enums/action.enum';
 import { ConfirmForgotPasswordDto } from './dto/confirm-forgot-password.dto';
 import { UsersService } from '../user/users.service';
+import {
+  GqlContext,
+  getUserFromContext,
+} from 'src/common/utils/graphql-context';
 
 // Passkey DTOs
 import {
@@ -44,6 +47,7 @@ export class AuthResolver {
     private readonly usersService: UsersService,
   ) {}
 
+  @Public()
   @Mutation(() => Boolean)
   async registerUser(
     @Args('registerUserDto') registerUserDto: RegisterUserDto,
@@ -57,6 +61,7 @@ export class AuthResolver {
     return userRegistered !== null;
   }
 
+  @Public()
   @Mutation(() => Auth)
   async loginUser(
     @Args('loginUserDto') loginUserDto: LoginUserDto,
@@ -71,7 +76,6 @@ export class AuthResolver {
   }
 
   @Mutation(() => Boolean)
-  @UseGuards(AuthGuard)
   @Permissions({
     action: Action.Update,
     subject: 'User',
@@ -90,11 +94,13 @@ export class AuthResolver {
     return passwordUpdated;
   }
 
+  @Public()
   @Mutation(() => Boolean)
   forgotPassword(@Args('email') email: string): Promise<boolean> {
     return this.authService.forgotPassword(email);
   }
 
+  @Public()
   @Mutation(() => Boolean)
   async confirmForgotPassword(
     @Args('confirmForgotPasswordDto')
@@ -148,6 +154,7 @@ export class AuthResolver {
   // Passkey (WebAuthn) Mutations
   // ============================================
 
+  @Public()
   @Mutation(() => PasskeyRegistrationOptions)
   async generatePasskeyRegistrationOptions(
     @Args('input') input: GeneratePasskeyRegistrationOptionsDto,
@@ -170,6 +177,7 @@ export class AuthResolver {
     }
   }
 
+  @Public()
   @Mutation(() => Boolean)
   async verifyPasskeyRegistration(
     @Args('input') input: VerifyPasskeyRegistrationDto,
@@ -207,6 +215,7 @@ export class AuthResolver {
     }
   }
 
+  @Public()
   @Mutation(() => PasskeyAuthenticationOptions)
   async generatePasskeyAuthenticationOptions(
     @Args('input', { nullable: true })
@@ -221,6 +230,7 @@ export class AuthResolver {
     }
   }
 
+  @Public()
   @Mutation(() => Auth)
   async verifyPasskeyAuthentication(
     @Args('input') input: VerifyPasskeyAuthenticationDto,
@@ -244,31 +254,19 @@ export class AuthResolver {
   }
 
   @Query(() => [PasskeyCredential])
-  @UseGuards(AuthGuard)
   async myPasskeys(
-    @Context() context: { req: { headers: { user: string } } },
+    @Context() context: GqlContext,
   ): Promise<PasskeyCredential[]> {
-    const userHeader = context.req.headers.user;
-    if (!userHeader) {
-      throw new UserInputError('User not authenticated');
-    }
-
-    const user = JSON.parse(userHeader);
+    const user = getUserFromContext(context);
     return this.passkeyService.getUserCredentials(user.id);
   }
 
   @Mutation(() => Boolean)
-  @UseGuards(AuthGuard)
   async deletePasskey(
     @Args('credentialId') credentialId: string,
-    @Context() context: { req: { headers: { user: string } } },
+    @Context() context: GqlContext,
   ): Promise<boolean> {
-    const userHeader = context.req.headers.user;
-    if (!userHeader) {
-      throw new UserInputError('User not authenticated');
-    }
-
-    const user = JSON.parse(userHeader);
+    const user = getUserFromContext(context);
     return this.passkeyService.deleteCredential(credentialId, user.id);
   }
 
@@ -276,6 +274,7 @@ export class AuthResolver {
   // Magic Link Mutations
   // ============================================
 
+  @Public()
   @Mutation(() => Boolean)
   async sendMagicLink(
     @Args('input') input: SendMagicLinkDto,
@@ -290,6 +289,7 @@ export class AuthResolver {
     }
   }
 
+  @Public()
   @Mutation(() => Auth)
   async verifyMagicLink(
     @Args('input') input: VerifyMagicLinkDto,
@@ -301,6 +301,7 @@ export class AuthResolver {
     }
   }
 
+  @Public()
   @Mutation(() => Boolean)
   async registerWithMagicLink(
     @Args('input') input: RegisterWithMagicLinkDto,

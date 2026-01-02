@@ -48,7 +48,7 @@ export class PoliciesGuard<
   constructor(
     private readonly reflector: Reflector,
     @Inject(CaslAbilityFactory)
-    private caslAbilityFactory: CaslAbilityFactory<A, S>,
+    private readonly caslAbilityFactory: CaslAbilityFactory<A, S>,
   ) {}
 
   /**
@@ -73,13 +73,12 @@ export class PoliciesGuard<
     const request = ctx.getContext().req;
     const args = ctx.getArgs();
 
-    if (
-      request.headers.user != null &&
-      request.headers.user !== 'undefined' &&
-      isLoggedIn(JSON.parse(request.headers.user))
-    ) {
-      const user: ILogin = JSON.parse(request.headers.user);
+    // SECURITY: Use request.user set by AuthMiddleware after JWT validation
+    // Never trust request.headers.user as it can be spoofed
+    // @see https://github.com/CommonwealthLabsCode/qckstrt/issues/183
+    const user: ILogin | undefined = request.user;
 
+    if (user && isLoggedIn(user)) {
       // Define the abilities based on the user's policies
       const ability = await this.caslAbilityFactory.defineAbility(
         permissions,

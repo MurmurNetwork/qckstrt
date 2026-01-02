@@ -24,11 +24,21 @@ describe('ProfileResolver', () => {
   const mockUserId = 'test-user-id';
   const mockUserEmail = 'test@example.com';
 
+  const mockUser = {
+    id: mockUserId,
+    email: mockUserEmail,
+    roles: ['User'],
+    department: 'Engineering',
+    clearance: 'Secret',
+  };
+
+  // SECURITY: Tests now use request.user (set by passport) instead of headers.user (spoofable)
+  // @see https://github.com/CommonwealthLabsCode/qckstrt/issues/183
   const mockContext = {
     req: {
       ip: '127.0.0.1',
+      user: mockUser,
       headers: {
-        user: JSON.stringify({ id: mockUserId, email: mockUserEmail }),
         'user-agent': 'test-agent',
       },
     },
@@ -36,6 +46,7 @@ describe('ProfileResolver', () => {
 
   const mockContextNoUser = {
     req: {
+      user: undefined,
       headers: {},
     },
   };

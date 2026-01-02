@@ -10,11 +10,20 @@ describe('DocumentsResolver', () => {
   let documentsResolver: DocumentsResolver;
   let documentsService: DocumentsService;
 
-  const mockUser = { id: 'user-1', email: 'user@example.com' };
+  const mockUser = {
+    id: 'user-1',
+    email: 'user@example.com',
+    roles: ['User'],
+    department: 'Engineering',
+    clearance: 'Secret',
+  };
 
+  // SECURITY: Tests now use request.user (set by passport) instead of headers.user (spoofable)
+  // @see https://github.com/CommonwealthLabsCode/qckstrt/issues/183
   const mockContext = {
     req: {
       user: mockUser,
+      headers: {},
     },
   };
 
@@ -76,7 +85,7 @@ describe('DocumentsResolver', () => {
     });
 
     it('should throw error when user not authenticated', () => {
-      const noUserContext = { req: {} };
+      const noUserContext = { req: { user: undefined, headers: {} } };
 
       expect(() => documentsResolver.listFiles(noUserContext)).toThrow(
         'User not authenticated',
