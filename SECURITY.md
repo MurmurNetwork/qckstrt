@@ -48,10 +48,23 @@ We take security vulnerabilities seriously. If you discover a security issue, pl
 
 ### Authentication
 
+**Authentication Methods:**
 - Passkeys (WebAuthn/FIDO2) as primary authentication
 - Magic links for passwordless email authentication
-- JWT tokens with appropriate expiration
-- Secure session management via Supabase Auth
+- Password-based authentication (legacy fallback)
+
+**Token Security:**
+- JWT tokens stored in httpOnly cookies (not accessible to JavaScript)
+- CSRF protection via stateless double-submit cookie pattern
+- Automatic token refresh via secure refresh token cookies
+
+**Architecture Security:**
+- API Gateway validates browser requests via CSRF tokens
+- Gateway signs requests to microservices using HMAC-SHA256
+- Microservices only accept HMAC-signed requests from the gateway
+- No secrets exposed in frontend code
+
+See [Authentication Security Guide](docs/guides/auth-security.md) for detailed architecture.
 
 ### Data Protection
 
