@@ -17,6 +17,9 @@ export {
 // Provider types
 export * from "./types.js";
 
+// Cache utilities
+export * from "./cache/index.js";
+
 // Extractor implementations
 export * from "./extractors/url.extractor.js";
 
