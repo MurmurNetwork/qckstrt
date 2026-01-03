@@ -217,12 +217,48 @@ CSP_REPORT_URI=https://app.qckstrt.com/api/csp-report
 
 See [security-headers.config.mjs](apps/frontend/config/security-headers.config.mjs) for configuration.
 
+### Error Handling & Information Disclosure Prevention
+
+All error responses are sanitized to prevent information disclosure that could help attackers understand system internals.
+
+**Error Sanitization:**
+
+| Environment | Behavior |
+|-------------|----------|
+| Production | Generic error messages returned to clients |
+| Development | Full error details for debugging |
+
+**Sanitized Information:**
+- Database schema details (table/column names)
+- File system paths
+- Stack traces
+- Connection strings
+- Internal IP addresses
+- API keys or tokens in error messages
+
+**Server-Side Logging:**
+- Full error details are logged server-side for debugging
+- Includes stack traces, query details, and context
+- Available for investigation without exposing to clients
+
+**User-Friendly Messages:**
+
+| Error Type | Client Message |
+|------------|----------------|
+| 5xx errors | "An unexpected error occurred." |
+| Unique violation | "This record already exists." |
+| Foreign key error | "This operation references a record that does not exist." |
+| Not null violation | "Required information is missing." |
+
+See [error-sanitizer.ts](apps/backend/src/common/exceptions/error-sanitizer.ts) for configuration.
+
 ### Code Security
 
 - Input validation on all user inputs via class-validator
 - Parameterized queries (TypeORM)
 - Strict CORS configuration for API endpoints
 - Rate limiting on authentication endpoints
+- Error sanitization prevents information disclosure
 
 ## Scope
 

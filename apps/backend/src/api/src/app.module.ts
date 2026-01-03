@@ -29,6 +29,7 @@ import { JwtStrategy } from 'src/common/auth/jwt.strategy';
 import { AuthMiddleware } from 'src/common/middleware/auth.middleware';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { AuthGuard } from 'src/common/guards/auth.guard';
+import { AllExceptionsFilter } from 'src/common/exceptions/all-exceptions.filter';
 import { HttpExceptionFilter } from 'src/common/exceptions/http-exception.filter';
 import { HealthModule } from './health/health.module';
 import { HmacSignerService } from 'src/common/services/hmac-signer.service';
@@ -142,6 +143,10 @@ const handleAuth = ({ req, res }: { req: Request; res: Response }) => {
     }),
   ],
   providers: [
+    // SECURITY: Exception filters for error sanitization
+    // AllExceptionsFilter must be first (processed last) to catch unhandled exceptions
+    // @see https://github.com/CommonwealthLabsCode/qckstrt/issues/190
+    { provide: APP_FILTER, useClass: AllExceptionsFilter },
     { provide: APP_FILTER, useClass: HttpExceptionFilter },
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     // SECURITY: Global auth guard implements "deny by default"
