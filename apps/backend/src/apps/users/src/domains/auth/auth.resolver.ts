@@ -1,5 +1,7 @@
 import { Args, ID, Mutation, Query, Resolver, Context } from '@nestjs/graphql';
 import { ConfigService } from '@nestjs/config';
+import { ForbiddenException, Logger } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { LoginUserDto } from './dto/login-user.dto';
 import { RegisterUserDto } from './dto/register-user.dto';
@@ -24,6 +26,8 @@ import {
   setAuthCookies,
   clearAuthCookies,
 } from 'src/common/utils/cookie.utils';
+import { AUTH_THROTTLE } from 'src/config/auth-throttle.config';
+import { AccountLockoutService } from './services/account-lockout.service';
 
 // Passkey DTOs
 import {
@@ -46,14 +50,23 @@ import {
 
 @Resolver(() => Boolean)
 export class AuthResolver {
+  private readonly logger = new Logger(AuthResolver.name);
+
   constructor(
     private readonly authService: AuthService,
     private readonly passkeyService: PasskeyService,
     private readonly usersService: UsersService,
     private readonly configService: ConfigService,
+    private readonly lockoutService: AccountLockoutService,
   ) {}
 
+  /**
+   * Register a new user account
+   * Rate limited: 3 attempts per minute
+   * @see https://github.com/CommonwealthLabsCode/qckstrt/issues/187
+   */
   @Public()
+  @Throttle({ default: AUTH_THROTTLE.register })
   @Mutation(() => Boolean)
   async registerUser(
     @Args('registerUserDto') registerUserDto: RegisterUserDto,
@@ -67,15 +80,42 @@ export class AuthResolver {
     return userRegistered !== null;
   }
 
+  /**
+   * Login with email and password
+   * Rate limited: 5 attempts per minute
+   * Includes account lockout after 5 failed attempts
+   * @see https://github.com/CommonwealthLabsCode/qckstrt/issues/187
+   */
   @Public()
+  @Throttle({ default: AUTH_THROTTLE.login })
   @Mutation(() => Auth)
   async loginUser(
     @Args('loginUserDto') loginUserDto: LoginUserDto,
     @Context() context: GqlContext,
   ): Promise<Auth> {
+    const { email } = loginUserDto;
+    const clientIp =
+      context.req?.ip ||
+      (context.req?.headers as Record<string, string>)?.['x-forwarded-for'];
+
+    // Check if account is locked
+    if (this.lockoutService.isLocked(email)) {
+      const remainingMs = this.lockoutService.getRemainingLockoutTime(email);
+      const remainingMin = Math.ceil(remainingMs / 60000);
+      this.logger.warn(
+        `Blocked login attempt for locked account: ${email} (IP: ${clientIp})`,
+      );
+      throw new ForbiddenException(
+        `Account temporarily locked. Try again in ${remainingMin} minute(s).`,
+      );
+    }
+
     let auth: Auth;
     try {
       auth = await this.authService.authenticateUser(loginUserDto);
+
+      // Clear lockout on successful login
+      this.lockoutService.clearLockout(email);
 
       // Set httpOnly cookies for browser clients
       if (context.res) {
@@ -87,6 +127,18 @@ export class AuthResolver {
         );
       }
     } catch (error) {
+      // Record failed attempt (may trigger lockout)
+      const isNowLocked = this.lockoutService.recordFailedAttempt(
+        email,
+        clientIp as string,
+      );
+
+      if (isNowLocked) {
+        throw new ForbiddenException(
+          'Too many failed login attempts. Account temporarily locked for 15 minutes.',
+        );
+      }
+
       throw new UserInputError(error.message);
     }
     return auth;
@@ -111,7 +163,13 @@ export class AuthResolver {
     return passwordUpdated;
   }
 
+  /**
+   * Request password reset email
+   * Rate limited: 3 attempts per hour (prevents email bombing)
+   * @see https://github.com/CommonwealthLabsCode/qckstrt/issues/187
+   */
   @Public()
+  @Throttle({ default: AUTH_THROTTLE.passwordReset })
   @Mutation(() => Boolean)
   forgotPassword(@Args('email') email: string): Promise<boolean> {
     return this.authService.forgotPassword(email);
@@ -169,9 +227,12 @@ export class AuthResolver {
 
   // ============================================
   // Passkey (WebAuthn) Mutations
+  // Rate limited: 10 attempts per minute
+  // @see https://github.com/CommonwealthLabsCode/qckstrt/issues/187
   // ============================================
 
   @Public()
+  @Throttle({ default: AUTH_THROTTLE.passkey })
   @Mutation(() => PasskeyRegistrationOptions)
   async generatePasskeyRegistrationOptions(
     @Args('input') input: GeneratePasskeyRegistrationOptionsDto,
@@ -195,6 +256,7 @@ export class AuthResolver {
   }
 
   @Public()
+  @Throttle({ default: AUTH_THROTTLE.passkey })
   @Mutation(() => Boolean)
   async verifyPasskeyRegistration(
     @Args('input') input: VerifyPasskeyRegistrationDto,
@@ -233,6 +295,7 @@ export class AuthResolver {
   }
 
   @Public()
+  @Throttle({ default: AUTH_THROTTLE.passkey })
   @Mutation(() => PasskeyAuthenticationOptions)
   async generatePasskeyAuthenticationOptions(
     @Args('input', { nullable: true })
@@ -248,6 +311,7 @@ export class AuthResolver {
   }
 
   @Public()
+  @Throttle({ default: AUTH_THROTTLE.passkey })
   @Mutation(() => Auth)
   async verifyPasskeyAuthentication(
     @Args('input') input: VerifyPasskeyAuthenticationDto,
@@ -302,9 +366,12 @@ export class AuthResolver {
 
   // ============================================
   // Magic Link Mutations
+  // Rate limited: 3 attempts per minute
+  // @see https://github.com/CommonwealthLabsCode/qckstrt/issues/187
   // ============================================
 
   @Public()
+  @Throttle({ default: AUTH_THROTTLE.magicLink })
   @Mutation(() => Boolean)
   async sendMagicLink(
     @Args('input') input: SendMagicLinkDto,
@@ -320,6 +387,7 @@ export class AuthResolver {
   }
 
   @Public()
+  @Throttle({ default: AUTH_THROTTLE.magicLink })
   @Mutation(() => Auth)
   async verifyMagicLink(
     @Args('input') input: VerifyMagicLinkDto,
@@ -348,6 +416,7 @@ export class AuthResolver {
   }
 
   @Public()
+  @Throttle({ default: AUTH_THROTTLE.magicLink })
   @Mutation(() => Boolean)
   async registerWithMagicLink(
     @Args('input') input: RegisterWithMagicLinkDto,

@@ -80,11 +80,148 @@ See [Authentication Security Guide](docs/guides/auth-security.md) for detailed a
 - Regular dependency updates via Dependabot
 - Automated security scanning in CI/CD
 
+### Security Headers
+
+All services include comprehensive security headers via helmet middleware:
+
+| Header | Protection |
+|--------|------------|
+| X-Frame-Options: DENY | Prevents clickjacking attacks |
+| X-Content-Type-Options: nosniff | Prevents MIME type sniffing |
+| Strict-Transport-Security | Forces HTTPS (1 year, includes subdomains) |
+| X-DNS-Prefetch-Control: off | Prevents DNS prefetch privacy leaks |
+| Referrer-Policy | Controls referrer information leakage |
+| Cross-Origin-Opener-Policy | Isolates browsing context |
+| Cross-Origin-Resource-Policy | Restricts cross-origin resource loading |
+
+### Authentication Rate Limiting
+
+All authentication endpoints have strict rate limits to prevent brute force and enumeration attacks:
+
+| Endpoint | Limit | Window | Protection |
+|----------|-------|--------|------------|
+| Login | 5 requests | 1 minute | Brute force prevention |
+| Registration | 3 requests | 1 minute | Account spam prevention |
+| Password Reset | 3 requests | 1 hour | Email bombing prevention |
+| Magic Link | 3 requests | 1 minute | Email bombing prevention |
+| Passkey Auth | 10 requests | 1 minute | WebAuthn rate limiting |
+
+**Account Lockout:**
+- Accounts are locked after **5 failed login attempts**
+- Lockout duration: **15 minutes**
+- All lockout events are logged for security monitoring
+- Lockout clears automatically on successful authentication
+
+**Rate Limit Logging:**
+All rate limit violations are logged with:
+- Client IP address
+- Operation attempted
+- Limit exceeded details
+- Timestamp
+
+See [auth-throttle.config.ts](apps/backend/src/config/auth-throttle.config.ts) for configuration.
+
+### Input Validation
+
+All GraphQL inputs are validated using NestJS ValidationPipe with class-validator decorators:
+
+**Global Validation Settings:**
+- `whitelist: true` - Strips properties not defined in DTOs
+- `forbidNonWhitelisted: true` - Rejects requests with unknown properties
+- `transform: true` - Auto-transforms payloads to DTO instances
+
+**Field Validation Rules:**
+
+| Field Type | Validation | Max Length |
+|------------|------------|------------|
+| Email | Valid email format | 255 chars |
+| Password | Uppercase, lowercase, digit, special char, min 8 chars | 128 chars |
+| Username | Min 6 characters | 50 chars |
+| Name fields | String type | 100 chars |
+| Token/JWT | String type | 2048 chars |
+| URL/redirectTo | Valid URL format | 2000 chars |
+
+**Validation Protections:**
+- Prevents buffer overflow attacks via max length limits
+- Blocks injection attempts by sanitizing inputs
+- Rejects malformed data before processing
+- Provides clear error messages for invalid inputs
+
+### CORS Configuration
+
+Cross-Origin Resource Sharing (CORS) is configured to prevent unauthorized cross-origin requests:
+
+**Production Mode:**
+- Origins restricted to `ALLOWED_ORIGINS` environment variable
+- Only whitelisted domains can make API requests
+- Credentials (cookies) are included in cross-origin requests
+
+**Development Mode:**
+- All origins are allowed for easier local development
+- Same security headers and method restrictions apply
+
+**Configuration:**
+
+| Setting | Value |
+|---------|-------|
+| Allowed Methods | GET, POST, OPTIONS |
+| Allowed Headers | Content-Type, Authorization, X-Requested-With, X-CSRF-Token |
+| Credentials | Enabled |
+| Preflight Cache | 24 hours |
+
+**Environment Variable:**
+```bash
+# Production example
+ALLOWED_ORIGINS=https://app.qckstrt.com,https://admin.qckstrt.com
+```
+
+See [cors.config.ts](apps/backend/src/config/cors.config.ts) for configuration.
+
+### Content Security Policy (CSP)
+
+The frontend implements Content Security Policy headers to prevent XSS attacks by controlling which resources can be loaded:
+
+**CSP Directives:**
+
+| Directive | Policy | Purpose |
+|-----------|--------|---------|
+| default-src | 'self' | Only allow resources from same origin |
+| script-src | 'self' 'unsafe-inline' | Allow scripts from same origin |
+| style-src | 'self' 'unsafe-inline' fonts.googleapis.com | Allow styles and Google Fonts |
+| font-src | 'self' fonts.gstatic.com data: | Allow fonts from Google and embedded |
+| img-src | 'self' data: blob: https: | Allow images from HTTPS sources |
+| connect-src | 'self' [API_ORIGIN] | Restrict API connections |
+| frame-ancestors | 'none' | Prevent embedding (clickjacking) |
+| base-uri | 'self' | Prevent base tag injection |
+| form-action | 'self' | Restrict form submissions |
+| object-src | 'none' | Block plugins (Flash, etc.) |
+
+**Additional Headers:**
+
+| Header | Value | Purpose |
+|--------|-------|---------|
+| X-Content-Type-Options | nosniff | Prevent MIME sniffing |
+| X-Frame-Options | DENY | Backup clickjacking protection |
+| Referrer-Policy | strict-origin-when-cross-origin | Control referrer leakage |
+| Permissions-Policy | camera=(), microphone=() | Restrict browser features |
+| Strict-Transport-Security | max-age=31536000 (prod only) | Force HTTPS |
+
+**CSP Violation Reporting:**
+
+CSP violations can be reported to a dedicated endpoint for monitoring:
+
+```bash
+# Enable CSP reporting (optional)
+CSP_REPORT_URI=https://app.qckstrt.com/api/csp-report
+```
+
+See [security-headers.config.mjs](apps/frontend/config/security-headers.config.mjs) for configuration.
+
 ### Code Security
 
-- Input validation on all user inputs
+- Input validation on all user inputs via class-validator
 - Parameterized queries (TypeORM)
-- CORS configuration for API endpoints
+- Strict CORS configuration for API endpoints
 - Rate limiting on authentication endpoints
 
 ## Scope

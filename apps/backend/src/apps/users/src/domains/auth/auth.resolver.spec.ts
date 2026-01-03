@@ -7,6 +7,7 @@ import { createMock } from '@golevelup/ts-jest';
 import { AuthResolver } from './auth.resolver';
 import { AuthService } from './auth.service';
 import { PasskeyService } from './services/passkey.service';
+import { AccountLockoutService } from './services/account-lockout.service';
 import { UsersService } from '../user/users.service';
 
 import {
@@ -27,11 +28,21 @@ const createMockContext = (): GqlContext => ({
   req: {
     user: undefined,
     headers: {},
-  },
+    ip: '127.0.0.1',
+  } as any,
   res: {
     cookie: jest.fn(),
     clearCookie: jest.fn(),
   } as any,
+});
+
+// Mock AccountLockoutService that returns sensible defaults
+const createMockLockoutService = () => ({
+  isLocked: jest.fn().mockReturnValue(false),
+  getRemainingLockoutTime: jest.fn().mockReturnValue(0),
+  recordFailedAttempt: jest.fn().mockReturnValue(false),
+  clearLockout: jest.fn(),
+  getFailedAttempts: jest.fn().mockReturnValue(0),
 });
 
 describe('AuthResolver', () => {
@@ -46,6 +57,10 @@ describe('AuthResolver', () => {
         { provide: PasskeyService, useValue: createMock<PasskeyService>() },
         { provide: UsersService, useValue: createMock<UsersService>() },
         { provide: ConfigService, useValue: createMock<ConfigService>() },
+        {
+          provide: AccountLockoutService,
+          useValue: createMockLockoutService(),
+        },
       ],
     }).compile();
 
@@ -323,6 +338,10 @@ describe('AuthResolver', () => {
           { provide: PasskeyService, useValue: createMock<PasskeyService>() },
           { provide: UsersService, useValue: createMock<UsersService>() },
           { provide: ConfigService, useValue: createMock<ConfigService>() },
+          {
+            provide: AccountLockoutService,
+            useValue: createMockLockoutService(),
+          },
         ],
       }).compile();
 
@@ -389,6 +408,10 @@ describe('AuthResolver', () => {
           { provide: PasskeyService, useValue: createMock<PasskeyService>() },
           { provide: UsersService, useValue: createMock<UsersService>() },
           { provide: ConfigService, useValue: createMock<ConfigService>() },
+          {
+            provide: AccountLockoutService,
+            useValue: createMockLockoutService(),
+          },
         ],
       }).compile();
 
@@ -461,6 +484,10 @@ describe('AuthResolver', () => {
           { provide: PasskeyService, useValue: createMock<PasskeyService>() },
           { provide: UsersService, useValue: createMock<UsersService>() },
           { provide: ConfigService, useValue: createMock<ConfigService>() },
+          {
+            provide: AccountLockoutService,
+            useValue: createMockLockoutService(),
+          },
         ],
       }).compile();
 
@@ -522,6 +549,10 @@ describe('AuthResolver', () => {
           { provide: PasskeyService, useValue: createMock<PasskeyService>() },
           { provide: UsersService, useValue: createMock<UsersService>() },
           { provide: ConfigService, useValue: createMock<ConfigService>() },
+          {
+            provide: AccountLockoutService,
+            useValue: createMockLockoutService(),
+          },
         ],
       }).compile();
 
@@ -584,6 +615,10 @@ describe('AuthResolver', () => {
           { provide: PasskeyService, useValue: createMock<PasskeyService>() },
           { provide: UsersService, useValue: createMock<UsersService>() },
           { provide: ConfigService, useValue: createMock<ConfigService>() },
+          {
+            provide: AccountLockoutService,
+            useValue: createMockLockoutService(),
+          },
         ],
       }).compile();
 
@@ -636,6 +671,10 @@ describe('AuthResolver', () => {
           { provide: PasskeyService, useValue: createMock<PasskeyService>() },
           { provide: UsersService, useValue: createMock<UsersService>() },
           { provide: ConfigService, useValue: createMock<ConfigService>() },
+          {
+            provide: AccountLockoutService,
+            useValue: createMockLockoutService(),
+          },
         ],
       }).compile();
 

@@ -1,6 +1,10 @@
-import { ExecutionContext, Injectable } from '@nestjs/common';
+import { ExecutionContext, Injectable, Logger } from '@nestjs/common';
 import { GqlExecutionContext } from '@nestjs/graphql';
-import { ThrottlerGuard } from '@nestjs/throttler';
+import {
+  ThrottlerGuard,
+  ThrottlerException,
+  ThrottlerLimitDetail,
+} from '@nestjs/throttler';
 
 /**
  * GraphQL-aware Throttler Guard
@@ -9,9 +13,14 @@ import { ThrottlerGuard } from '@nestjs/throttler';
  * Extracts the HTTP request and response from GraphQL execution context.
  * For federated subgraphs, the request may come from the gateway without
  * a full HTTP context, so we create a mock response if needed.
+ *
+ * Also logs rate limit violations for security monitoring.
+ * @see https://github.com/CommonwealthLabsCode/qckstrt/issues/187
  */
 @Injectable()
 export class GqlThrottlerGuard extends ThrottlerGuard {
+  private readonly logger = new Logger(GqlThrottlerGuard.name);
+
   /**
    * Get the request object from the execution context.
    * For GraphQL, we need to extract it from the GQL context.
@@ -29,5 +38,31 @@ export class GqlThrottlerGuard extends ThrottlerGuard {
     };
 
     return { req, res };
+  }
+
+  /**
+   * Override to log rate limit violations before throwing exception
+   */
+  protected async throwThrottlingException(
+    context: ExecutionContext,
+    throttlerLimitDetail: ThrottlerLimitDetail,
+  ): Promise<void> {
+    const gqlCtx = GqlExecutionContext.create(context);
+    const ctx = gqlCtx.getContext();
+    const info = gqlCtx.getInfo();
+
+    const ip =
+      ctx.req?.ip ||
+      (ctx.req?.headers as Record<string, string>)?.['x-forwarded-for'] ||
+      'unknown';
+    const operationName = info?.fieldName || 'unknown';
+
+    this.logger.warn(
+      `Rate limit exceeded: ${operationName} from IP ${ip} - ` +
+        `Limit: ${throttlerLimitDetail.limit}/${throttlerLimitDetail.ttl}ms, ` +
+        `Total hits: ${throttlerLimitDetail.totalHits}`,
+    );
+
+    throw new ThrottlerException(`Too many requests. Please try again later.`);
   }
 }

@@ -21,6 +21,7 @@ import secretsConfig from 'src/config/secrets.config';
 import relationaldbConfig from 'src/config/relationaldb.config';
 import csrfConfig from 'src/config/csrf.config';
 import cookieConfig from 'src/config/cookie.config';
+import { getGraphQLCorsConfig } from 'src/config/cors.config';
 
 import { CsrfMiddleware } from 'src/common/middleware/csrf.middleware';
 import { PassportModule } from '@nestjs/passport';
@@ -114,7 +115,10 @@ const handleAuth = ({ req, res }: { req: Request; res: Response }) => {
         hmacSigner: HmacSignerService,
       ) => ({
         server: {
-          cors: true,
+          // SECURITY: Restrict CORS to allowed origins in production
+          // In development, allows all origins for easier testing
+          // @see https://github.com/CommonwealthLabsCode/qckstrt/issues/189
+          cors: getGraphQLCorsConfig(configService),
           path: 'api',
           context: handleAuth,
           // SECURITY: Disable introspection in production to prevent schema enumeration attacks

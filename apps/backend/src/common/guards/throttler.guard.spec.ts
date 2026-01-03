@@ -2,7 +2,11 @@ import { ExecutionContext } from '@nestjs/common';
 import { GqlExecutionContext } from '@nestjs/graphql';
 import { GqlThrottlerGuard } from './throttler.guard';
 import { Reflector } from '@nestjs/core';
-import { ThrottlerModuleOptions, ThrottlerStorage } from '@nestjs/throttler';
+import {
+  ThrottlerModuleOptions,
+  ThrottlerStorage,
+  ThrottlerException,
+} from '@nestjs/throttler';
 
 jest.mock('@nestjs/graphql', () => ({
   GqlExecutionContext: {
@@ -101,6 +105,205 @@ describe('GqlThrottlerGuard', () => {
       );
       expect(typeof (result.res as { setHeader: unknown }).setHeader).toBe(
         'function',
+      );
+    });
+  });
+
+  describe('throwThrottlingException', () => {
+    it('should log rate limit violation and throw ThrottlerException', async () => {
+      const mockReq = { ip: '192.168.1.100', headers: {} };
+      const mockRes = { setHeader: jest.fn() };
+
+      const mockGqlContext = {
+        getContext: jest.fn().mockReturnValue({
+          req: mockReq,
+          res: mockRes,
+        }),
+        getInfo: jest.fn().mockReturnValue({
+          fieldName: 'loginUser',
+        }),
+      };
+
+      (GqlExecutionContext.create as jest.Mock).mockReturnValue(mockGqlContext);
+
+      const mockExecutionContext = {} as ExecutionContext;
+      const mockThrottlerLimitDetail = {
+        limit: 5,
+        ttl: 60000,
+        totalHits: 6,
+        timeToExpire: 45000,
+        isBlocked: true,
+        timeToBlockExpire: 45000,
+      };
+
+      const loggerSpy = jest.spyOn(guard['logger'], 'warn');
+
+      // Access the protected method via type assertion
+      const guardWithAccess = guard as unknown as {
+        throwThrottlingException: (
+          ctx: ExecutionContext,
+          detail: typeof mockThrottlerLimitDetail,
+        ) => Promise<void>;
+      };
+
+      await expect(
+        guardWithAccess.throwThrottlingException(
+          mockExecutionContext,
+          mockThrottlerLimitDetail,
+        ),
+      ).rejects.toThrow(ThrottlerException);
+
+      expect(loggerSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Rate limit exceeded'),
+      );
+      expect(loggerSpy).toHaveBeenCalledWith(
+        expect.stringContaining('loginUser'),
+      );
+      expect(loggerSpy).toHaveBeenCalledWith(
+        expect.stringContaining('192.168.1.100'),
+      );
+    });
+
+    it('should use x-forwarded-for header when ip is not available', async () => {
+      const mockReq = {
+        headers: { 'x-forwarded-for': '10.0.0.1' },
+      };
+      const mockRes = { setHeader: jest.fn() };
+
+      const mockGqlContext = {
+        getContext: jest.fn().mockReturnValue({
+          req: mockReq,
+          res: mockRes,
+        }),
+        getInfo: jest.fn().mockReturnValue({
+          fieldName: 'registerUser',
+        }),
+      };
+
+      (GqlExecutionContext.create as jest.Mock).mockReturnValue(mockGqlContext);
+
+      const mockExecutionContext = {} as ExecutionContext;
+      const mockThrottlerLimitDetail = {
+        limit: 3,
+        ttl: 60000,
+        totalHits: 4,
+        timeToExpire: 30000,
+        isBlocked: true,
+        timeToBlockExpire: 30000,
+      };
+
+      const loggerSpy = jest.spyOn(guard['logger'], 'warn');
+
+      const guardWithAccess = guard as unknown as {
+        throwThrottlingException: (
+          ctx: ExecutionContext,
+          detail: typeof mockThrottlerLimitDetail,
+        ) => Promise<void>;
+      };
+
+      await expect(
+        guardWithAccess.throwThrottlingException(
+          mockExecutionContext,
+          mockThrottlerLimitDetail,
+        ),
+      ).rejects.toThrow(ThrottlerException);
+
+      expect(loggerSpy).toHaveBeenCalledWith(
+        expect.stringContaining('10.0.0.1'),
+      );
+    });
+
+    it('should use unknown when no IP information is available', async () => {
+      const mockReq = { headers: {} };
+      const mockRes = { setHeader: jest.fn() };
+
+      const mockGqlContext = {
+        getContext: jest.fn().mockReturnValue({
+          req: mockReq,
+          res: mockRes,
+        }),
+        getInfo: jest.fn().mockReturnValue({
+          fieldName: 'forgotPassword',
+        }),
+      };
+
+      (GqlExecutionContext.create as jest.Mock).mockReturnValue(mockGqlContext);
+
+      const mockExecutionContext = {} as ExecutionContext;
+      const mockThrottlerLimitDetail = {
+        limit: 3,
+        ttl: 3600000,
+        totalHits: 4,
+        timeToExpire: 3500000,
+        isBlocked: true,
+        timeToBlockExpire: 3500000,
+      };
+
+      const loggerSpy = jest.spyOn(guard['logger'], 'warn');
+
+      const guardWithAccess = guard as unknown as {
+        throwThrottlingException: (
+          ctx: ExecutionContext,
+          detail: typeof mockThrottlerLimitDetail,
+        ) => Promise<void>;
+      };
+
+      await expect(
+        guardWithAccess.throwThrottlingException(
+          mockExecutionContext,
+          mockThrottlerLimitDetail,
+        ),
+      ).rejects.toThrow(ThrottlerException);
+
+      expect(loggerSpy).toHaveBeenCalledWith(
+        expect.stringContaining('unknown'),
+      );
+    });
+
+    it('should include limit details in log message', async () => {
+      const mockGqlContext = {
+        getContext: jest.fn().mockReturnValue({
+          req: { ip: '127.0.0.1', headers: {} },
+          res: { setHeader: jest.fn() },
+        }),
+        getInfo: jest.fn().mockReturnValue({
+          fieldName: 'sendMagicLink',
+        }),
+      };
+
+      (GqlExecutionContext.create as jest.Mock).mockReturnValue(mockGqlContext);
+
+      const mockExecutionContext = {} as ExecutionContext;
+      const mockThrottlerLimitDetail = {
+        limit: 3,
+        ttl: 60000,
+        totalHits: 10,
+        timeToExpire: 55000,
+        isBlocked: true,
+        timeToBlockExpire: 55000,
+      };
+
+      const loggerSpy = jest.spyOn(guard['logger'], 'warn');
+
+      const guardWithAccess = guard as unknown as {
+        throwThrottlingException: (
+          ctx: ExecutionContext,
+          detail: typeof mockThrottlerLimitDetail,
+        ) => Promise<void>;
+      };
+
+      await expect(
+        guardWithAccess.throwThrottlingException(
+          mockExecutionContext,
+          mockThrottlerLimitDetail,
+        ),
+      ).rejects.toThrow(ThrottlerException);
+
+      expect(loggerSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Limit: 3/60000ms'),
+      );
+      expect(loggerSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Total hits: 10'),
       );
     });
   });
