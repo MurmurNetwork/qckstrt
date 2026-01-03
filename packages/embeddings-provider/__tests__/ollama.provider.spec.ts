@@ -124,4 +124,46 @@ describe("OllamaEmbeddingProvider", () => {
       );
     });
   });
+
+  describe("circuit breaker", () => {
+    it("should provide circuit breaker health", () => {
+      const health = provider.getCircuitBreakerHealth();
+
+      expect(health).toBeDefined();
+      expect(health.serviceName).toBe("Ollama");
+      expect(health.state).toBe("closed");
+      expect(health.isHealthy).toBe(true);
+      expect(health.failureCount).toBe(0);
+    });
+
+    it("should track failures", async () => {
+      // Simulate consecutive failures
+      mockFetch.mockRejectedValue(new Error("Network error"));
+
+      for (let i = 0; i < 3; i++) {
+        await provider.embedQuery(`test-${i}`).catch(() => {});
+      }
+
+      const health = provider.getCircuitBreakerHealth();
+      expect(health.failureCount).toBeGreaterThan(0);
+    });
+
+    it("should reset failure count on success", async () => {
+      // First fail a few times
+      mockFetch.mockRejectedValue(new Error("Network error"));
+      await provider.embedQuery("fail").catch(() => {});
+      await provider.embedQuery("fail2").catch(() => {});
+
+      // Then succeed
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ embedding: [0.1, 0.2] }),
+      });
+
+      await provider.embedQuery("success");
+
+      const health = provider.getCircuitBreakerHealth();
+      expect(health.failureCount).toBe(0);
+    });
+  });
 });

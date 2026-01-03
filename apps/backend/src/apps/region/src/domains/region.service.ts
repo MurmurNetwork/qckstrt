@@ -127,133 +127,165 @@ export class RegionDomainService {
     };
   }
 
+  /**
+   * Sync propositions using bulk upsert
+   *
+   * PERFORMANCE: Uses batch upsert instead of N+1 queries
+   * This reduces database round trips from O(2n) to O(2) queries
+   */
   private async syncPropositions(): Promise<{
     processed: number;
     created: number;
     updated: number;
   }> {
-    let processed = 0;
-    let created = 0;
-    let updated = 0;
-
     const propositions = await this.regionService.fetchPropositions();
-    for (const prop of propositions) {
-      const existing = await this.propositionRepo.findOne({
-        where: { externalId: prop.externalId },
-      });
-
-      if (existing) {
-        await this.propositionRepo.update(existing.id, {
-          title: prop.title,
-          summary: prop.summary,
-          fullText: prop.fullText,
-          status: prop.status,
-          electionDate: prop.electionDate,
-          sourceUrl: prop.sourceUrl,
-        });
-        updated++;
-      } else {
-        await this.propositionRepo.save({
-          externalId: prop.externalId,
-          title: prop.title,
-          summary: prop.summary,
-          fullText: prop.fullText,
-          status: prop.status,
-          electionDate: prop.electionDate,
-          sourceUrl: prop.sourceUrl,
-        });
-        created++;
-      }
-      processed++;
+    if (propositions.length === 0) {
+      return { processed: 0, created: 0, updated: 0 };
     }
 
-    return { processed, created, updated };
+    // Get existing externalIds in a single query to calculate created vs updated
+    const externalIds = propositions.map((p) => p.externalId);
+    const existingRecords = await this.propositionRepo
+      .createQueryBuilder('p')
+      .select('p.externalId')
+      .where('p.externalId IN (:...externalIds)', { externalIds })
+      .getMany();
+    const existingExternalIds = new Set(
+      existingRecords.map((r) => r.externalId),
+    );
+
+    // Batch upsert all propositions in a single query
+    const entities = propositions.map((prop) => ({
+      externalId: prop.externalId,
+      title: prop.title,
+      summary: prop.summary,
+      fullText: prop.fullText,
+      status: prop.status,
+      electionDate: prop.electionDate,
+      sourceUrl: prop.sourceUrl,
+    }));
+
+    await this.propositionRepo.upsert(entities, {
+      conflictPaths: ['externalId'],
+      skipUpdateIfNoValuesChanged: true,
+    });
+
+    const created = propositions.filter(
+      (p) => !existingExternalIds.has(p.externalId),
+    ).length;
+    const updated = propositions.filter((p) =>
+      existingExternalIds.has(p.externalId),
+    ).length;
+
+    return { processed: propositions.length, created, updated };
   }
 
+  /**
+   * Sync meetings using bulk upsert
+   *
+   * PERFORMANCE: Uses batch upsert instead of N+1 queries
+   * This reduces database round trips from O(2n) to O(2) queries
+   * @see https://github.com/CommonwealthLabsCode/qckstrt/issues/197
+   */
   private async syncMeetings(): Promise<{
     processed: number;
     created: number;
     updated: number;
   }> {
-    let processed = 0;
-    let created = 0;
-    let updated = 0;
-
     const meetings = await this.regionService.fetchMeetings();
-    for (const meeting of meetings) {
-      const existing = await this.meetingRepo.findOne({
-        where: { externalId: meeting.externalId },
-      });
-
-      if (existing) {
-        await this.meetingRepo.update(existing.id, {
-          title: meeting.title,
-          body: meeting.body,
-          scheduledAt: meeting.scheduledAt,
-          location: meeting.location,
-          agendaUrl: meeting.agendaUrl,
-          videoUrl: meeting.videoUrl,
-        });
-        updated++;
-      } else {
-        await this.meetingRepo.save({
-          externalId: meeting.externalId,
-          title: meeting.title,
-          body: meeting.body,
-          scheduledAt: meeting.scheduledAt,
-          location: meeting.location,
-          agendaUrl: meeting.agendaUrl,
-          videoUrl: meeting.videoUrl,
-        });
-        created++;
-      }
-      processed++;
+    if (meetings.length === 0) {
+      return { processed: 0, created: 0, updated: 0 };
     }
 
-    return { processed, created, updated };
+    // Get existing externalIds in a single query to calculate created vs updated
+    const externalIds = meetings.map((m) => m.externalId);
+    const existingRecords = await this.meetingRepo
+      .createQueryBuilder('m')
+      .select('m.externalId')
+      .where('m.externalId IN (:...externalIds)', { externalIds })
+      .getMany();
+    const existingExternalIds = new Set(
+      existingRecords.map((r) => r.externalId),
+    );
+
+    // Batch upsert all meetings in a single query
+    const entities = meetings.map((meeting) => ({
+      externalId: meeting.externalId,
+      title: meeting.title,
+      body: meeting.body,
+      scheduledAt: meeting.scheduledAt,
+      location: meeting.location,
+      agendaUrl: meeting.agendaUrl,
+      videoUrl: meeting.videoUrl,
+    }));
+
+    await this.meetingRepo.upsert(entities, {
+      conflictPaths: ['externalId'],
+      skipUpdateIfNoValuesChanged: true,
+    });
+
+    const created = meetings.filter(
+      (m) => !existingExternalIds.has(m.externalId),
+    ).length;
+    const updated = meetings.filter((m) =>
+      existingExternalIds.has(m.externalId),
+    ).length;
+
+    return { processed: meetings.length, created, updated };
   }
 
+  /**
+   * Sync representatives using bulk upsert
+   *
+   * PERFORMANCE: Uses batch upsert instead of N+1 queries
+   * This reduces database round trips from O(2n) to O(2) queries
+   * @see https://github.com/CommonwealthLabsCode/qckstrt/issues/197
+   */
   private async syncRepresentatives(): Promise<{
     processed: number;
     created: number;
     updated: number;
   }> {
-    let processed = 0;
-    let created = 0;
-    let updated = 0;
-
     const reps = await this.regionService.fetchRepresentatives();
-    for (const rep of reps) {
-      const existing = await this.representativeRepo.findOne({
-        where: { externalId: rep.externalId },
-      });
-
-      if (existing) {
-        await this.representativeRepo.update(existing.id, {
-          name: rep.name,
-          chamber: rep.chamber,
-          district: rep.district,
-          party: rep.party,
-          photoUrl: rep.photoUrl,
-          contactInfo: rep.contactInfo,
-        });
-        updated++;
-      } else {
-        await this.representativeRepo.save({
-          externalId: rep.externalId,
-          name: rep.name,
-          chamber: rep.chamber,
-          district: rep.district,
-          party: rep.party,
-          photoUrl: rep.photoUrl,
-          contactInfo: rep.contactInfo,
-        });
-        created++;
-      }
-      processed++;
+    if (reps.length === 0) {
+      return { processed: 0, created: 0, updated: 0 };
     }
 
-    return { processed, created, updated };
+    // Get existing externalIds in a single query to calculate created vs updated
+    const externalIds = reps.map((r) => r.externalId);
+    const existingRecords = await this.representativeRepo
+      .createQueryBuilder('r')
+      .select('r.externalId')
+      .where('r.externalId IN (:...externalIds)', { externalIds })
+      .getMany();
+    const existingExternalIds = new Set(
+      existingRecords.map((r) => r.externalId),
+    );
+
+    // Batch upsert all representatives in a single query
+    const entities = reps.map((rep) => ({
+      externalId: rep.externalId,
+      name: rep.name,
+      chamber: rep.chamber,
+      district: rep.district,
+      party: rep.party,
+      photoUrl: rep.photoUrl,
+      contactInfo: rep.contactInfo,
+    }));
+
+    await this.representativeRepo.upsert(entities, {
+      conflictPaths: ['externalId'],
+      skipUpdateIfNoValuesChanged: true,
+    });
+
+    const created = reps.filter(
+      (r) => !existingExternalIds.has(r.externalId),
+    ).length;
+    const updated = reps.filter((r) =>
+      existingExternalIds.has(r.externalId),
+    ).length;
+
+    return { processed: reps.length, created, updated };
   }
 
   /**

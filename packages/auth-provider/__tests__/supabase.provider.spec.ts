@@ -1028,4 +1028,84 @@ describe("SupabaseAuthProvider", () => {
       );
     });
   });
+
+  describe("circuit breaker", () => {
+    it("should provide circuit breaker health", () => {
+      const health = provider.getCircuitBreakerHealth();
+
+      expect(health).toBeDefined();
+      expect(health.serviceName).toBe("Supabase");
+      expect(health.state).toBe("closed");
+      expect(health.isHealthy).toBe(true);
+      expect(health.failureCount).toBe(0);
+    });
+
+    it("should track failures through circuit breaker", async () => {
+      // Simulate consecutive failures
+      mockAuth.admin.createUser.mockResolvedValue({
+        data: null,
+        error: { message: "Service unavailable" },
+      });
+
+      for (let i = 0; i < 3; i++) {
+        await provider
+          .registerUser({
+            email: `test${i}@example.com`,
+            username: `testuser${i}`,
+            password: "Password123!",
+          })
+          .catch(() => {});
+      }
+
+      const health = provider.getCircuitBreakerHealth();
+      expect(health.failureCount).toBeGreaterThan(0);
+    });
+
+    it("should reset failure count on success", async () => {
+      // First fail
+      mockAuth.admin.createUser.mockResolvedValue({
+        data: null,
+        error: { message: "Service unavailable" },
+      });
+      await provider
+        .registerUser({
+          email: "fail@example.com",
+          username: "failuser",
+          password: "Password123!",
+        })
+        .catch(() => {});
+
+      // Then succeed
+      mockAuth.admin.createUser.mockResolvedValue({
+        data: { user: { id: "user-uuid-123" } },
+        error: null,
+      });
+
+      await provider.registerUser({
+        email: "success@example.com",
+        username: "successuser",
+        password: "Password123!",
+      });
+
+      const health = provider.getCircuitBreakerHealth();
+      expect(health.failureCount).toBe(0);
+    });
+
+    it("should protect authenticateUser with circuit breaker", async () => {
+      // Simulate failures
+      mockAuth.signInWithPassword.mockResolvedValue({
+        data: null,
+        error: { message: "Service unavailable" },
+      });
+
+      for (let i = 0; i < 3; i++) {
+        await provider
+          .authenticateUser(`test${i}@example.com`, "password")
+          .catch(() => {});
+      }
+
+      const health = provider.getCircuitBreakerHealth();
+      expect(health.failureCount).toBeGreaterThan(0);
+    });
+  });
 });

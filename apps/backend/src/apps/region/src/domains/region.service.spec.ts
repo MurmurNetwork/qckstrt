@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { Repository, SelectQueryBuilder, UpdateResult } from 'typeorm';
+import { Repository, SelectQueryBuilder } from 'typeorm';
 import { createMock } from '@golevelup/ts-jest';
 
 import { RegionDomainService } from './region.service';
@@ -10,7 +10,15 @@ import { RepresentativeEntity } from 'src/db/entities/representative.entity';
 import {
   RegionService as RegionProviderService,
   CivicDataType,
+  PropositionStatus,
+  Proposition,
 } from '@qckstrt/region-provider';
+
+/**
+ * Tests for Region Domain Service
+ *
+ * PERFORMANCE: Tests updated for bulk upsert implementation
+ */
 
 describe('RegionDomainService', () => {
   let service: RegionDomainService;
@@ -79,26 +87,53 @@ describe('RegionDomainService', () => {
       fetchRepresentatives: jest.fn().mockResolvedValue(mockRepresentatives),
     };
 
+    // Create mock query builders for bulk upsert operations
+    const createMockQueryBuilder = <T extends { externalId: string }>(
+      getResult: T[] = [],
+    ) => {
+      const qb = createMock<SelectQueryBuilder<T>>();
+      qb.select.mockReturnThis();
+      qb.where.mockReturnThis();
+      qb.orderBy.mockReturnThis();
+      qb.addOrderBy.mockReturnThis();
+      qb.skip.mockReturnThis();
+      qb.take.mockReturnThis();
+      qb.getMany.mockResolvedValue(getResult);
+      qb.getCount.mockResolvedValue(getResult.length);
+      return qb;
+    };
+
     const mockPropositionRepo = {
       findOne: jest.fn(),
       findAndCount: jest.fn(),
-      save: jest.fn(),
-      update: jest.fn(),
+      upsert: jest
+        .fn()
+        .mockResolvedValue({ identifiers: [], generatedMaps: [] }),
+      createQueryBuilder: jest.fn(() =>
+        createMockQueryBuilder<PropositionEntity>(),
+      ),
     };
 
     const mockMeetingRepo = {
       findOne: jest.fn(),
       findAndCount: jest.fn(),
-      save: jest.fn(),
-      update: jest.fn(),
+      upsert: jest
+        .fn()
+        .mockResolvedValue({ identifiers: [], generatedMaps: [] }),
+      createQueryBuilder: jest.fn(() =>
+        createMockQueryBuilder<MeetingEntity>(),
+      ),
     };
 
     const mockRepresentativeRepo = {
       findOne: jest.fn(),
       findAndCount: jest.fn(),
-      save: jest.fn(),
-      update: jest.fn(),
-      createQueryBuilder: jest.fn(),
+      upsert: jest
+        .fn()
+        .mockResolvedValue({ identifiers: [], generatedMaps: [] }),
+      createQueryBuilder: jest.fn(() =>
+        createMockQueryBuilder<RepresentativeEntity>(),
+      ),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -148,29 +183,22 @@ describe('RegionDomainService', () => {
 
   describe('syncAll', () => {
     it('should sync all data types and return results', async () => {
-      propositionRepo.findOne.mockResolvedValue(null);
-      propositionRepo.save.mockResolvedValue({} as PropositionEntity);
-      meetingRepo.findOne.mockResolvedValue(null);
-      meetingRepo.save.mockResolvedValue({} as MeetingEntity);
-      representativeRepo.findOne.mockResolvedValue(null);
-      representativeRepo.save.mockResolvedValue({} as RepresentativeEntity);
-
+      // All repos use bulk upsert, no existing records
       const results = await service.syncAll();
 
       expect(results).toHaveLength(3);
       expect(results[0].dataType).toBe(CivicDataType.PROPOSITIONS);
       expect(results[1].dataType).toBe(CivicDataType.MEETINGS);
       expect(results[2].dataType).toBe(CivicDataType.REPRESENTATIVES);
+      expect(propositionRepo.upsert).toHaveBeenCalled();
+      expect(meetingRepo.upsert).toHaveBeenCalled();
+      expect(representativeRepo.upsert).toHaveBeenCalled();
     });
 
     it('should handle sync errors gracefully', async () => {
       regionProviderService.fetchPropositions.mockRejectedValue(
         new Error('Network error'),
       );
-      meetingRepo.findOne.mockResolvedValue(null);
-      meetingRepo.save.mockResolvedValue({} as MeetingEntity);
-      representativeRepo.findOne.mockResolvedValue(null);
-      representativeRepo.save.mockResolvedValue({} as RepresentativeEntity);
 
       const results = await service.syncAll();
 
@@ -180,89 +208,186 @@ describe('RegionDomainService', () => {
   });
 
   describe('syncDataType - PROPOSITIONS', () => {
-    it('should create new propositions', async () => {
-      propositionRepo.findOne.mockResolvedValue(null);
-      propositionRepo.save.mockResolvedValue({} as PropositionEntity);
-
+    it('should create new propositions using bulk upsert', async () => {
+      // No existing records - createQueryBuilder returns empty array
       const result = await service.syncDataType(CivicDataType.PROPOSITIONS);
 
       expect(result.itemsCreated).toBe(1);
       expect(result.itemsUpdated).toBe(0);
       expect(result.itemsProcessed).toBe(1);
-      expect(propositionRepo.save).toHaveBeenCalledWith(
+      expect(propositionRepo.upsert).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({
+            externalId: 'prop-1',
+            title: 'Test Proposition 1',
+          }),
+        ]),
         expect.objectContaining({
-          externalId: 'prop-1',
-          title: 'Test Proposition 1',
+          conflictPaths: ['externalId'],
         }),
       );
     });
 
-    it('should update existing propositions', async () => {
-      const existingProp = { id: 'uuid-1', externalId: 'prop-1' };
-      propositionRepo.findOne.mockResolvedValue(
-        existingProp as PropositionEntity,
-      );
-      propositionRepo.update.mockResolvedValue({} as UpdateResult);
+    it('should update existing propositions using bulk upsert', async () => {
+      // Mock existing record found
+      const existingQb = createMock<SelectQueryBuilder<PropositionEntity>>();
+      existingQb.select.mockReturnThis();
+      existingQb.where.mockReturnThis();
+      existingQb.getMany.mockResolvedValue([
+        { externalId: 'prop-1' } as PropositionEntity,
+      ]);
+      propositionRepo.createQueryBuilder.mockReturnValue(existingQb);
 
       const result = await service.syncDataType(CivicDataType.PROPOSITIONS);
 
       expect(result.itemsCreated).toBe(0);
       expect(result.itemsUpdated).toBe(1);
-      expect(propositionRepo.update).toHaveBeenCalledWith(
-        'uuid-1',
-        expect.objectContaining({
-          title: 'Test Proposition 1',
-        }),
-      );
+      expect(propositionRepo.upsert).toHaveBeenCalled();
+    });
+
+    it('should handle empty propositions list', async () => {
+      regionProviderService.fetchPropositions.mockResolvedValue([]);
+
+      const result = await service.syncDataType(CivicDataType.PROPOSITIONS);
+
+      expect(result.itemsProcessed).toBe(0);
+      expect(result.itemsCreated).toBe(0);
+      expect(result.itemsUpdated).toBe(0);
+      expect(propositionRepo.upsert).not.toHaveBeenCalled();
     });
   });
 
   describe('syncDataType - MEETINGS', () => {
-    it('should create new meetings', async () => {
-      meetingRepo.findOne.mockResolvedValue(null);
-      meetingRepo.save.mockResolvedValue({} as MeetingEntity);
-
+    it('should create new meetings using bulk upsert', async () => {
       const result = await service.syncDataType(CivicDataType.MEETINGS);
 
       expect(result.itemsCreated).toBe(1);
       expect(result.itemsUpdated).toBe(0);
-      expect(meetingRepo.save).toHaveBeenCalled();
+      expect(meetingRepo.upsert).toHaveBeenCalled();
     });
 
-    it('should update existing meetings', async () => {
-      const existingMeeting = { id: 'uuid-1', externalId: 'meeting-1' };
-      meetingRepo.findOne.mockResolvedValue(existingMeeting as MeetingEntity);
-      meetingRepo.update.mockResolvedValue({} as UpdateResult);
+    it('should update existing meetings using bulk upsert', async () => {
+      const existingQb = createMock<SelectQueryBuilder<MeetingEntity>>();
+      existingQb.select.mockReturnThis();
+      existingQb.where.mockReturnThis();
+      existingQb.getMany.mockResolvedValue([
+        { externalId: 'meeting-1' } as MeetingEntity,
+      ]);
+      meetingRepo.createQueryBuilder.mockReturnValue(existingQb);
 
       const result = await service.syncDataType(CivicDataType.MEETINGS);
 
       expect(result.itemsUpdated).toBe(1);
-      expect(meetingRepo.update).toHaveBeenCalled();
+      expect(meetingRepo.upsert).toHaveBeenCalled();
     });
   });
 
   describe('syncDataType - REPRESENTATIVES', () => {
-    it('should create new representatives', async () => {
-      representativeRepo.findOne.mockResolvedValue(null);
-      representativeRepo.save.mockResolvedValue({} as RepresentativeEntity);
-
+    it('should create new representatives using bulk upsert', async () => {
       const result = await service.syncDataType(CivicDataType.REPRESENTATIVES);
 
       expect(result.itemsCreated).toBe(1);
-      expect(representativeRepo.save).toHaveBeenCalled();
+      expect(representativeRepo.upsert).toHaveBeenCalled();
     });
 
-    it('should update existing representatives', async () => {
-      const existingRep = { id: 'uuid-1', externalId: 'rep-1' };
-      representativeRepo.findOne.mockResolvedValue(
-        existingRep as RepresentativeEntity,
-      );
-      representativeRepo.update.mockResolvedValue({} as UpdateResult);
+    it('should update existing representatives using bulk upsert', async () => {
+      const existingQb = createMock<SelectQueryBuilder<RepresentativeEntity>>();
+      existingQb.select.mockReturnThis();
+      existingQb.where.mockReturnThis();
+      existingQb.getMany.mockResolvedValue([
+        { externalId: 'rep-1' } as RepresentativeEntity,
+      ]);
+      representativeRepo.createQueryBuilder.mockReturnValue(existingQb);
 
       const result = await service.syncDataType(CivicDataType.REPRESENTATIVES);
 
       expect(result.itemsUpdated).toBe(1);
-      expect(representativeRepo.update).toHaveBeenCalled();
+      expect(representativeRepo.upsert).toHaveBeenCalled();
+    });
+  });
+
+  describe('bulk upsert performance', () => {
+    it('should use only 2 queries per sync (SELECT existing + UPSERT)', async () => {
+      // This test verifies the N+1 fix - we should call createQueryBuilder once
+      // and upsert once, instead of N findOne + N save/update calls
+      await service.syncDataType(CivicDataType.PROPOSITIONS);
+
+      // Should call createQueryBuilder exactly once (for SELECT existing)
+      expect(propositionRepo.createQueryBuilder).toHaveBeenCalledTimes(1);
+      // Should call upsert exactly once (for bulk insert/update)
+      expect(propositionRepo.upsert).toHaveBeenCalledTimes(1);
+    });
+
+    it('should handle large datasets (1000+ records) efficiently', async () => {
+      // Generate 1000 propositions to test bulk performance
+      const largeDataset: Proposition[] = Array.from(
+        { length: 1000 },
+        (_, i) => ({
+          externalId: `prop-${i}`,
+          title: `Proposition ${i}`,
+          summary: `Summary for proposition ${i}`,
+          fullText: `Full text for proposition ${i}`,
+          status: PropositionStatus.PENDING,
+          electionDate: new Date('2024-11-05'),
+          sourceUrl: `https://example.com/prop-${i}`,
+        }),
+      );
+
+      regionProviderService.fetchPropositions.mockResolvedValue(largeDataset);
+
+      const result = await service.syncDataType(CivicDataType.PROPOSITIONS);
+
+      // Verify all 1000 items processed
+      expect(result.itemsProcessed).toBe(1000);
+      expect(result.itemsCreated).toBe(1000);
+
+      // Verify only 2 database calls (not 2000)
+      expect(propositionRepo.createQueryBuilder).toHaveBeenCalledTimes(1);
+      expect(propositionRepo.upsert).toHaveBeenCalledTimes(1);
+
+      // Verify upsert was called with all 1000 entities
+      expect(propositionRepo.upsert).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ externalId: 'prop-0' }),
+          expect.objectContaining({ externalId: 'prop-999' }),
+        ]),
+        expect.any(Object),
+      );
+    });
+
+    it('should correctly identify creates vs updates in mixed batch', async () => {
+      // 500 new + 500 existing = 1000 total
+      const mixedDataset: Proposition[] = Array.from(
+        { length: 1000 },
+        (_, i) => ({
+          externalId: `prop-${i}`,
+          title: `Proposition ${i}`,
+          summary: `Summary ${i}`,
+          fullText: undefined,
+          status: PropositionStatus.PENDING,
+          electionDate: new Date('2024-11-05'),
+          sourceUrl: undefined,
+        }),
+      );
+
+      regionProviderService.fetchPropositions.mockResolvedValue(mixedDataset);
+
+      // Mock 500 existing records (prop-0 through prop-499)
+      const existingQb = createMock<SelectQueryBuilder<PropositionEntity>>();
+      existingQb.select.mockReturnThis();
+      existingQb.where.mockReturnThis();
+      existingQb.getMany.mockResolvedValue(
+        Array.from({ length: 500 }, (_, i) => ({
+          externalId: `prop-${i}`,
+        })) as PropositionEntity[],
+      );
+      propositionRepo.createQueryBuilder.mockReturnValue(existingQb);
+
+      const result = await service.syncDataType(CivicDataType.PROPOSITIONS);
+
+      expect(result.itemsProcessed).toBe(1000);
+      expect(result.itemsCreated).toBe(500); // prop-500 through prop-999
+      expect(result.itemsUpdated).toBe(500); // prop-0 through prop-499
     });
   });
 
