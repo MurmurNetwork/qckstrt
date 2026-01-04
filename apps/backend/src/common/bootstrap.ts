@@ -12,6 +12,7 @@ import { env } from 'process';
 import { ConfigService } from '@nestjs/config';
 import { getHelmetOptions } from 'src/config/security-headers.config';
 import { getCorsConfig } from 'src/config/cors.config';
+import { GracefulShutdownService } from './services/graceful-shutdown.service';
 
 const logger = new Logger('Bootstrap');
 
@@ -69,6 +70,14 @@ export default async function bootstrap(
   if (env.ENV !== 'prod') {
     setupSwagger(app, appName, appDescription, appVersion);
   }
+
+  // INFRA-003: Enable graceful shutdown for Kubernetes SIGTERM handling
+  // @see https://github.com/CommonwealthLabsCode/qckstrt/issues/207
+  app.enableShutdownHooks();
+
+  // Initialize graceful shutdown service with HTTP server reference
+  const gracefulShutdown = app.get(GracefulShutdownService);
+  gracefulShutdown.setHttpServer(app.getHttpServer());
 
   await app.listen(port);
   const bootupTime = Date.now() - startTime;
