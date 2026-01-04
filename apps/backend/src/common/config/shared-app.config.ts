@@ -6,6 +6,7 @@ import { GraphQLExceptionFilter } from '../exceptions/graphql-exception.filter';
 import { RolesGuard } from '../guards/roles.guard';
 import { GqlThrottlerGuard } from '../guards/throttler.guard';
 import { PoliciesGuard } from '../guards/policies.guard';
+import { GracefulShutdownService } from '../services/graceful-shutdown.service';
 
 /**
  * Shared throttler configuration for all microservices
@@ -42,6 +43,8 @@ export const SHARED_PROVIDERS = [
   { provide: APP_GUARD, useClass: GqlThrottlerGuard },
   { provide: APP_GUARD, useClass: RolesGuard },
   { provide: APP_GUARD, useClass: PoliciesGuard },
+  // INFRA-003: Graceful shutdown service for Kubernetes SIGTERM handling
+  GracefulShutdownService,
 ];
 
 /**
