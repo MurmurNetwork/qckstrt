@@ -1,4 +1,5 @@
 import { registerAs } from '@nestjs/config';
+import { isProduction } from './environment.config';
 
 /**
  * Cookie Configuration
@@ -11,9 +12,7 @@ export default registerAs('cookie', () => ({
    * Whether cookies should be secure (HTTPS only)
    * Default: true in production
    */
-  secure:
-    process.env.COOKIE_SECURE === 'true' ||
-    process.env.NODE_ENV === 'production',
+  secure: process.env.COOKIE_SECURE === 'true' || isProduction(),
 
   /**
    * SameSite attribute for cookies

@@ -4,6 +4,7 @@ import { IRelationalDBProvider } from "@qckstrt/common";
 import {
   PostgresProvider,
   PostgresConfig,
+  PoolConfig,
 } from "./providers/postgres.provider.js";
 
 /**
@@ -13,6 +14,13 @@ import {
  *
  * Configure via RELATIONAL_DB_PROVIDER environment variable:
  * - postgres (default, via Supabase)
+ *
+ * Pool configuration via:
+ * - RELATIONAL_DB_POOL_MAX (default: 20)
+ * - RELATIONAL_DB_POOL_MIN (default: 5)
+ * - RELATIONAL_DB_IDLE_TIMEOUT_MS (default: 30000)
+ * - RELATIONAL_DB_CONNECTION_TIMEOUT_MS (default: 5000)
+ * - RELATIONAL_DB_ACQUIRE_TIMEOUT_MS (default: 10000)
  */
 @Module({
   providers: [
@@ -25,7 +33,27 @@ import {
         switch (provider.toLowerCase()) {
           case "postgres":
           case "postgresql":
-          default:
+          default: {
+            // Read pool configuration
+            const poolConfig: PoolConfig = {
+              max: configService.get<number>("relationaldb.postgres.pool.max"),
+              min: configService.get<number>("relationaldb.postgres.pool.min"),
+              idleTimeoutMs: configService.get<number>(
+                "relationaldb.postgres.pool.idleTimeoutMs",
+              ),
+              connectionTimeoutMs: configService.get<number>(
+                "relationaldb.postgres.pool.connectionTimeoutMs",
+              ),
+              acquireTimeoutMs: configService.get<number>(
+                "relationaldb.postgres.pool.acquireTimeoutMs",
+              ),
+            };
+
+            // Remove undefined values so defaults are used
+            const cleanPoolConfig = Object.fromEntries(
+              Object.entries(poolConfig).filter(([, v]) => v !== undefined),
+            ) as PoolConfig;
+
             const postgresConfig: PostgresConfig = {
               host:
                 configService.get<string>("relationaldb.postgres.host") ||
@@ -44,9 +72,14 @@ import {
               ssl:
                 configService.get<boolean>("relationaldb.postgres.ssl") ||
                 false,
+              pool:
+                Object.keys(cleanPoolConfig).length > 0
+                  ? cleanPoolConfig
+                  : undefined,
             };
 
             return new PostgresProvider(postgresConfig);
+          }
         }
       },
       inject: [ConfigService],

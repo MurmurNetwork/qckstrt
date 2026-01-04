@@ -4,9 +4,9 @@ import {
   sanitizeErrorMessage,
   sanitizeDatabaseError,
   createSanitizedResponse,
-  isProduction,
   GENERIC_ERROR_MESSAGES,
 } from './error-sanitizer';
+import { isProduction } from 'src/config/environment.config';
 
 describe('ErrorSanitizer', () => {
   const originalEnv = process.env.NODE_ENV;

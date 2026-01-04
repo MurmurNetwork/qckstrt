@@ -1,4 +1,5 @@
 import { HttpStatus, Logger } from '@nestjs/common';
+import { isProduction } from 'src/config/environment.config';
 
 /**
  * Error Sanitization Utility
@@ -10,12 +11,6 @@ import { HttpStatus, Logger } from '@nestjs/common';
  */
 
 const logger = new Logger('ErrorSanitizer');
-
-/**
- * Check if running in production mode
- */
-export const isProduction = (): boolean =>
-  process.env.NODE_ENV === 'production';
 
 /**
  * Generic error messages for production

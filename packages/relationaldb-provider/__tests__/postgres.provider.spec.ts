@@ -2,6 +2,8 @@ import "reflect-metadata";
 import {
   PostgresProvider,
   PostgresConfig,
+  PoolConfig,
+  DEFAULT_POOL_CONFIG,
 } from "../src/providers/postgres.provider";
 import { RelationalDBType } from "@qckstrt/common";
 
@@ -85,6 +87,85 @@ describe("PostgresProvider", () => {
     it("should return true", async () => {
       const result = await provider.isAvailable();
       expect(result).toBe(true);
+    });
+  });
+
+  describe("connection pool configuration", () => {
+    it("should use default pool config when not provided", () => {
+      const options = provider.getConnectionOptions([]) as any;
+
+      expect(options.extra).toBeDefined();
+      expect(options.extra.max).toBe(DEFAULT_POOL_CONFIG.max);
+      expect(options.extra.min).toBe(DEFAULT_POOL_CONFIG.min);
+      expect(options.extra.idleTimeoutMillis).toBe(
+        DEFAULT_POOL_CONFIG.idleTimeoutMs,
+      );
+      expect(options.extra.connectionTimeoutMillis).toBe(
+        DEFAULT_POOL_CONFIG.connectionTimeoutMs,
+      );
+      expect(options.extra.acquireTimeoutMillis).toBe(
+        DEFAULT_POOL_CONFIG.acquireTimeoutMs,
+      );
+    });
+
+    it("should use custom pool config when provided", () => {
+      const customPool: PoolConfig = {
+        max: 50,
+        min: 10,
+        idleTimeoutMs: 60000,
+        connectionTimeoutMs: 10000,
+        acquireTimeoutMs: 20000,
+      };
+      const customConfig: PostgresConfig = { ...config, pool: customPool };
+      const customProvider = new PostgresProvider(customConfig);
+      const options = customProvider.getConnectionOptions([]) as any;
+
+      expect(options.extra.max).toBe(50);
+      expect(options.extra.min).toBe(10);
+      expect(options.extra.idleTimeoutMillis).toBe(60000);
+      expect(options.extra.connectionTimeoutMillis).toBe(10000);
+      expect(options.extra.acquireTimeoutMillis).toBe(20000);
+    });
+
+    it("should merge partial pool config with defaults", () => {
+      const partialPool: PoolConfig = {
+        max: 30,
+      };
+      const partialConfig: PostgresConfig = { ...config, pool: partialPool };
+      const partialProvider = new PostgresProvider(partialConfig);
+      const options = partialProvider.getConnectionOptions([]) as any;
+
+      // Custom value
+      expect(options.extra.max).toBe(30);
+      // Default values
+      expect(options.extra.min).toBe(DEFAULT_POOL_CONFIG.min);
+      expect(options.extra.idleTimeoutMillis).toBe(
+        DEFAULT_POOL_CONFIG.idleTimeoutMs,
+      );
+    });
+
+    it("should return pool config via getPoolConfig", () => {
+      const poolConfig = provider.getPoolConfig();
+
+      expect(poolConfig).toEqual(DEFAULT_POOL_CONFIG);
+    });
+
+    it("getPoolConfig should return a copy not the original", () => {
+      const poolConfig1 = provider.getPoolConfig();
+      const poolConfig2 = provider.getPoolConfig();
+
+      expect(poolConfig1).not.toBe(poolConfig2);
+      expect(poolConfig1).toEqual(poolConfig2);
+    });
+  });
+
+  describe("DEFAULT_POOL_CONFIG", () => {
+    it("should have correct default values", () => {
+      expect(DEFAULT_POOL_CONFIG.max).toBe(20);
+      expect(DEFAULT_POOL_CONFIG.min).toBe(5);
+      expect(DEFAULT_POOL_CONFIG.idleTimeoutMs).toBe(30000);
+      expect(DEFAULT_POOL_CONFIG.connectionTimeoutMs).toBe(5000);
+      expect(DEFAULT_POOL_CONFIG.acquireTimeoutMs).toBe(10000);
     });
   });
 });

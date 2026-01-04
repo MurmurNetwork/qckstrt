@@ -2,6 +2,7 @@ import { ConfigService } from '@nestjs/config';
 import { getSecrets } from '@qckstrt/secrets-provider';
 import { createLogger, LogLevel } from '@qckstrt/logging-provider';
 import { DBConnection, DBType } from 'src/common/enums/db.enums';
+import { isDevelopment } from './environment.config';
 
 /**
  * Config logger for use during application initialization
@@ -77,7 +78,6 @@ export default async (): Promise<Partial<IAppConfig>> => {
   const description = configService.get('DESCRIPTION');
   const port = configService.get('PORT');
   const region = configService.get('AWS_REGION');
-  const nodeEnv = configService.get('NODE_ENV') || 'dev';
 
   if (
     !project ||
@@ -102,7 +102,7 @@ export default async (): Promise<Partial<IAppConfig>> => {
   };
 
   // In dev mode, skip Vault and use environment variables directly
-  if (nodeEnv === 'dev' || nodeEnv === 'development') {
+  if (isDevelopment()) {
     // Load API keys from environment variable in dev mode
     const apiKeysJson = configService.get('API_KEYS');
     if (apiKeysJson) {

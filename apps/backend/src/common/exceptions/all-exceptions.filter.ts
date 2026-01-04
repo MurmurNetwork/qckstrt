@@ -10,9 +10,9 @@ import { Request, Response } from 'express';
 import {
   createSanitizedResponse,
   logErrorDetails,
-  isProduction,
   GENERIC_ERROR_MESSAGES,
 } from './error-sanitizer';
+import { isProduction } from 'src/config/environment.config';
 
 /**
  * Global Exception Filter
