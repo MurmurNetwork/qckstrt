@@ -36,6 +36,7 @@ import { DbModule } from 'src/db/db.module';
 import { AuditLogEntity } from 'src/db/entities/audit-log.entity';
 import { AuditModule } from 'src/common/audit/audit.module';
 import { CaslModule } from 'src/permissions/casl.module';
+import { HealthModule } from 'src/common/health';
 
 /**
  * Knowledge App Module
@@ -69,6 +70,10 @@ import { CaslModule } from 'src/permissions/casl.module';
     }),
     CaslModule.forRoot(),
     KnowledgeModule,
+    HealthModule.forRoot({
+      serviceName: 'knowledge-service',
+      hasDatabase: true,
+    }),
   ],
   providers: SHARED_PROVIDERS,
 })
@@ -79,6 +84,12 @@ export class AppModule implements NestModule {
       // Only requests signed by the gateway are accepted
       // @see https://github.com/CommonwealthLabsCode/qckstrt/issues/185
       .apply(HMACMiddleware, LoggerMiddleware)
+      .exclude(
+        // Health endpoints are excluded from HMAC validation for Kubernetes probes
+        { path: 'health', method: RequestMethod.GET },
+        { path: 'health/live', method: RequestMethod.GET },
+        { path: 'health/ready', method: RequestMethod.GET },
+      )
       .forRoutes({ path: '*', method: RequestMethod.ALL });
   }
 }

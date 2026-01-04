@@ -118,6 +118,58 @@ See [websocket-auth.service.ts](apps/backend/src/common/auth/websocket-auth.serv
 - Secrets managed via Supabase Vault
 - No sensitive data in client-side storage
 
+### Health Endpoints (Kubernetes Probes)
+
+Health check endpoints are available on all services for Kubernetes liveness and readiness probes. These endpoints are **intentionally excluded** from HMAC validation to allow direct cluster-internal access.
+
+**Available Endpoints:**
+
+| Endpoint | Purpose | Checks |
+|----------|---------|--------|
+| `/health` | Full health status | Database, memory, service metadata |
+| `/health/live` | Liveness probe | Process running check |
+| `/health/ready` | Readiness probe | Database connectivity |
+
+**Security Architecture:**
+
+```
+External Traffic                    Kubernetes Probes
+      │                                   │
+      ▼                                   ▼
+┌─────────────┐                    ┌─────────────┐
+│   Browser   │                    │   kubelet   │
+└─────────────┘                    └─────────────┘
+      │                                   │
+      ▼ (CSRF + JWT)                      │ (Direct - No Auth)
+┌─────────────┐                           │
+│ API Gateway │                           │
+└─────────────┘                           │
+      │                                   │
+      ▼ (HMAC Signed)                     ▼
+┌─────────────┐                    ┌─────────────┐
+│ Microservice│◄───────────────────│ /health/*   │
+│  (Protected)│                    │ (Excluded)  │
+└─────────────┘                    └─────────────┘
+```
+
+**Security Considerations:**
+
+| Aspect | Protection |
+|--------|------------|
+| Network Access | Health endpoints only accessible within cluster network |
+| Information Disclosure | Limited to service name, uptime, and component status |
+| DoS Protection | Standard rate limiting applies |
+| Authentication | None required (by design for K8s probes) |
+
+**Why Health Endpoints Skip Authentication:**
+
+1. **Kubernetes Requirement**: kubelet probes must access services directly without going through the gateway
+2. **No User Data**: Health endpoints return only operational status, not sensitive data
+3. **Cluster-Internal**: These endpoints are not exposed externally
+4. **Fast Response**: Authentication would add latency to health checks
+
+See [health.module.ts](apps/backend/src/common/health/health.module.ts) for implementation.
+
 ### Infrastructure
 
 - Principle of least privilege for IAM roles

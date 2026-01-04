@@ -40,6 +40,7 @@ import { MeetingEntity } from 'src/db/entities/meeting.entity';
 import { RepresentativeEntity } from 'src/db/entities/representative.entity';
 import { AuditModule } from 'src/common/audit/audit.module';
 import { CaslModule } from 'src/permissions/casl.module';
+import { HealthModule } from 'src/common/health';
 
 /**
  * Region App Module
@@ -82,6 +83,7 @@ import { CaslModule } from 'src/permissions/casl.module';
     }),
     CaslModule.forRoot(),
     RegionDomainModule,
+    HealthModule.forRoot({ serviceName: 'region-service', hasDatabase: true }),
   ],
   providers: SHARED_PROVIDERS,
 })

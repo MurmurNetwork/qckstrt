@@ -41,6 +41,30 @@ pnpm test
 | Knowledge | 3003 | RAG/semantic search |
 | Files | 3004 | File processing |
 
+## Health Endpoints
+
+All services provide health check endpoints for Kubernetes liveness and readiness probes:
+
+| Endpoint | Purpose | Response |
+|----------|---------|----------|
+| `/health` | Full health status | Database, memory, uptime, version |
+| `/health/live` | Liveness probe | Is the process running? |
+| `/health/ready` | Readiness probe | Can the service handle requests? |
+
+**Example Response (GET /health):**
+```json
+{
+  "status": "ok",
+  "info": {
+    "memory": { "status": "up", "heapUsed": "45.23MB" },
+    "database": { "status": "up", "responseTime": "3ms" },
+    "service": { "status": "up", "name": "users-service", "uptime": 3600 }
+  }
+}
+```
+
+> **Note:** Health endpoints are excluded from HMAC authentication to allow direct Kubernetes probe access. They are only accessible within the cluster network. See [SECURITY.md](../../SECURITY.md#health-endpoints-kubernetes-probes) for details.
+
 ## User Profile GraphQL API
 
 The Users service includes a comprehensive profile management API:
