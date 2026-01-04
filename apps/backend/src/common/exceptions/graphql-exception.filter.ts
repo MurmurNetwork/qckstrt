@@ -10,9 +10,9 @@ import { GraphQLError } from 'graphql';
 import {
   sanitizeErrorMessage,
   logErrorDetails,
-  isProduction,
   GENERIC_ERROR_MESSAGES,
 } from './error-sanitizer';
+import { isProduction } from 'src/config/environment.config';
 
 /**
  * GraphQL Exception Filter

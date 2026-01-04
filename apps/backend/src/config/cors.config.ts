@@ -1,6 +1,6 @@
 import { CorsOptions } from '@nestjs/common/interfaces/external/cors-options.interface';
 import { ConfigService } from '@nestjs/config';
-import { env } from 'node:process';
+import { isProduction } from './environment.config';
 
 /**
  * CORS Configuration
@@ -18,15 +18,6 @@ import { env } from 'node:process';
  *
  * @see https://github.com/CommonwealthLabsCode/qckstrt/issues/189
  */
-
-/**
- * Check if the current environment is production
- * Supports both NODE_ENV=production and ENV=prod formats
- */
-function isProduction(configService: ConfigService): boolean {
-  const nodeEnv = configService.get<string>('NODE_ENV');
-  return nodeEnv === 'production' || env.ENV === 'prod';
-}
 
 /**
  * Standard allowed headers for CORS requests
@@ -56,7 +47,7 @@ export const CORS_MAX_AGE = 86400;
  */
 export function getCorsConfig(configService: ConfigService): CorsOptions {
   const allowedOrigins = configService.get<string>('ALLOWED_ORIGINS');
-  const isProd = isProduction(configService);
+  const isProd = isProduction();
 
   if (isProd && allowedOrigins) {
     const origins = allowedOrigins.split(',').map((o) => o.trim());
@@ -94,7 +85,7 @@ export function getGraphQLCorsConfig(configService: ConfigService): {
   allowedHeaders: string[];
 } {
   const allowedOrigins = configService.get<string>('ALLOWED_ORIGINS');
-  const isProd = isProduction(configService);
+  const isProd = isProduction();
 
   if (isProd && allowedOrigins) {
     const origins = allowedOrigins.split(',').map((o) => o.trim());

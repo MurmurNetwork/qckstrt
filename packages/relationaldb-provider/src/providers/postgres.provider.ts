@@ -3,6 +3,37 @@ import { DataSourceOptions } from "typeorm";
 import { IRelationalDBProvider, RelationalDBType } from "@qckstrt/common";
 
 /**
+ * Connection pool configuration
+ */
+export interface PoolConfig {
+  /**
+   * Maximum number of connections in pool
+   * Default: 20
+   */
+  max?: number;
+  /**
+   * Minimum number of connections in pool
+   * Default: 5
+   */
+  min?: number;
+  /**
+   * Connection idle timeout in milliseconds
+   * Default: 30000 (30 seconds)
+   */
+  idleTimeoutMs?: number;
+  /**
+   * Connection timeout in milliseconds
+   * Default: 5000 (5 seconds)
+   */
+  connectionTimeoutMs?: number;
+  /**
+   * Acquire timeout - how long to wait for available connection in milliseconds
+   * Default: 10000 (10 seconds)
+   */
+  acquireTimeoutMs?: number;
+}
+
+/**
  * PostgreSQL configuration
  */
 export interface PostgresConfig {
@@ -12,7 +43,22 @@ export interface PostgresConfig {
   username: string;
   password: string;
   ssl?: boolean;
+  /**
+   * Connection pool configuration
+   */
+  pool?: PoolConfig;
 }
+
+/**
+ * Default pool configuration values
+ */
+export const DEFAULT_POOL_CONFIG: Required<PoolConfig> = {
+  max: 20,
+  min: 5,
+  idleTimeoutMs: 30000, // 30 seconds
+  connectionTimeoutMs: 5000, // 5 seconds
+  acquireTimeoutMs: 10000, // 10 seconds
+};
 
 /**
  * PostgreSQL Provider (OSS)
@@ -40,10 +86,18 @@ export interface PostgresConfig {
 @Injectable()
 export class PostgresProvider implements IRelationalDBProvider {
   private readonly logger = new Logger(PostgresProvider.name);
+  private readonly poolConfig: Required<PoolConfig>;
 
   constructor(private readonly config: PostgresConfig) {
+    // Merge provided pool config with defaults
+    this.poolConfig = {
+      ...DEFAULT_POOL_CONFIG,
+      ...config.pool,
+    };
+
     this.logger.log(
-      `PostgreSQL provider initialized: ${config.username}@${config.host}:${config.port}/${config.database}`,
+      `PostgreSQL provider initialized: ${config.username}@${config.host}:${config.port}/${config.database} ` +
+        `(pool: min=${this.poolConfig.min}, max=${this.poolConfig.max})`,
     );
   }
 
@@ -69,7 +123,27 @@ export class PostgresProvider implements IRelationalDBProvider {
       synchronize: true, // Auto-create tables (disable in production!)
       logging: false,
       ssl: this.config.ssl ? { rejectUnauthorized: false } : false,
+      // Connection pool settings (pg library options)
+      extra: {
+        // Maximum number of connections in pool
+        max: this.poolConfig.max,
+        // Minimum number of connections in pool
+        min: this.poolConfig.min,
+        // Connection idle timeout (ms)
+        idleTimeoutMillis: this.poolConfig.idleTimeoutMs,
+        // Connection timeout (ms)
+        connectionTimeoutMillis: this.poolConfig.connectionTimeoutMs,
+        // Acquire timeout - how long to wait for available connection (ms)
+        acquireTimeoutMillis: this.poolConfig.acquireTimeoutMs,
+      },
     } as DataSourceOptions;
+  }
+
+  /**
+   * Get the current pool configuration
+   */
+  getPoolConfig(): Required<PoolConfig> {
+    return { ...this.poolConfig };
   }
 
   async isAvailable(): Promise<boolean> {

@@ -1,7 +1,12 @@
 import { Inject, Injectable, NestMiddleware, Optional } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
-import { ILogger, LOGGER } from '@qckstrt/logging-provider';
-import { createLogger, LogLevel } from '@qckstrt/logging-provider';
+import {
+  ILogger,
+  LOGGER,
+  createLogger,
+  LogLevel,
+} from '@qckstrt/logging-provider';
+import { isProduction } from 'src/config/environment.config';
 
 // Extend Express Request to include audit context
 declare global {
@@ -29,7 +34,7 @@ export class LoggerMiddleware implements NestMiddleware {
       createLogger({
         serviceName: 'backend',
         level: LogLevel.INFO,
-        format: process.env.NODE_ENV === 'production' ? 'json' : 'pretty',
+        format: isProduction() ? 'json' : 'pretty',
       });
   }
 

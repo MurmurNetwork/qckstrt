@@ -22,6 +22,7 @@ import type {
 import { PasskeyCredentialEntity } from 'src/db/entities/passkey-credential.entity';
 import { WebAuthnChallengeEntity } from 'src/db/entities/webauthn-challenge.entity';
 import { UserEntity } from 'src/db/entities/user.entity';
+import { isProduction } from 'src/config/environment.config';
 
 @Injectable()
 export class PasskeyService {
@@ -39,7 +40,7 @@ export class PasskeyService {
     private readonly challengeRepo: Repository<WebAuthnChallengeEntity>,
     private readonly configService: ConfigService,
   ) {
-    const isProduction = process.env.NODE_ENV === 'production';
+    const isProd = isProduction();
 
     // Get WebAuthn configuration
     const rpId = this.configService.get<string>('webauthn.rpId');
@@ -47,7 +48,7 @@ export class PasskeyService {
     const rpName = this.configService.get<string>('webauthn.rpName');
 
     // Require explicit configuration in production
-    if (isProduction) {
+    if (isProd) {
       if (!rpId) {
         throw new Error(
           'WebAuthn rpId must be configured in production (WEBAUTHN_RP_ID)',
@@ -66,7 +67,7 @@ export class PasskeyService {
     this.rpName = rpName || 'Qckstrt';
 
     // Log warning if using defaults in non-production
-    if (!isProduction && (!rpId || !origin)) {
+    if (!isProd && (!rpId || !origin)) {
       this.logger.warn(
         'WebAuthn using default localhost configuration. ' +
           'Set WEBAUTHN_RP_ID and WEBAUTHN_ORIGIN for production.',

@@ -10,21 +10,18 @@ import {
 describe('CORS Configuration', () => {
   let mockConfigService: jest.Mocked<ConfigService>;
 
-  const originalEnv = process.env.ENV;
+  const originalNodeEnv = process.env.NODE_ENV;
 
   beforeEach(() => {
     mockConfigService = {
       get: jest.fn(),
     } as unknown as jest.Mocked<ConfigService>;
-
-    // Reset environment variables
-    (process.env as { ENV?: string }).ENV = undefined;
   });
 
   afterEach(() => {
     jest.clearAllMocks();
     // Restore original environment
-    (process.env as { ENV?: string }).ENV = originalEnv;
+    process.env.NODE_ENV = originalNodeEnv;
   });
 
   describe('Constants', () => {
@@ -49,8 +46,8 @@ describe('CORS Configuration', () => {
   describe('getCorsConfig', () => {
     describe('in development mode', () => {
       beforeEach(() => {
+        process.env.NODE_ENV = 'development';
         mockConfigService.get.mockImplementation((key: string) => {
-          if (key === 'NODE_ENV') return 'development';
           if (key === 'ALLOWED_ORIGINS') return undefined;
           return undefined;
         });
@@ -77,13 +74,13 @@ describe('CORS Configuration', () => {
       });
     });
 
-    describe('in production mode with NODE_ENV', () => {
+    describe('in production mode', () => {
       const allowedOrigins =
         'https://app.example.com,https://admin.example.com';
 
       beforeEach(() => {
+        process.env.NODE_ENV = 'production';
         mockConfigService.get.mockImplementation((key: string) => {
-          if (key === 'NODE_ENV') return 'production';
           if (key === 'ALLOWED_ORIGINS') return allowedOrigins;
           return undefined;
         });
@@ -118,33 +115,10 @@ describe('CORS Configuration', () => {
       });
     });
 
-    describe('in production mode with ENV=prod', () => {
-      const allowedOrigins = 'https://app.example.com';
-
-      beforeEach(() => {
-        (process.env as { ENV?: string }).ENV = 'prod';
-        mockConfigService.get.mockImplementation((key: string) => {
-          if (key === 'NODE_ENV') return undefined;
-          if (key === 'ALLOWED_ORIGINS') return allowedOrigins;
-          return undefined;
-        });
-      });
-
-      it('should restrict to allowed origins', () => {
-        const config = getCorsConfig(mockConfigService);
-        expect(config.origin).toEqual(['https://app.example.com']);
-      });
-
-      it('should include maxAge', () => {
-        const config = getCorsConfig(mockConfigService);
-        expect(config.maxAge).toBe(CORS_MAX_AGE);
-      });
-    });
-
     describe('in production without ALLOWED_ORIGINS', () => {
       beforeEach(() => {
+        process.env.NODE_ENV = 'production';
         mockConfigService.get.mockImplementation((key: string) => {
-          if (key === 'NODE_ENV') return 'production';
           if (key === 'ALLOWED_ORIGINS') return undefined;
           return undefined;
         });
@@ -158,8 +132,8 @@ describe('CORS Configuration', () => {
 
     describe('origin trimming', () => {
       beforeEach(() => {
+        process.env.NODE_ENV = 'production';
         mockConfigService.get.mockImplementation((key: string) => {
-          if (key === 'NODE_ENV') return 'production';
           if (key === 'ALLOWED_ORIGINS')
             return '  https://app.example.com  ,  https://admin.example.com  ';
           return undefined;
@@ -179,8 +153,8 @@ describe('CORS Configuration', () => {
   describe('getGraphQLCorsConfig', () => {
     describe('in development mode', () => {
       beforeEach(() => {
+        process.env.NODE_ENV = 'development';
         mockConfigService.get.mockImplementation((key: string) => {
-          if (key === 'NODE_ENV') return 'development';
           if (key === 'ALLOWED_ORIGINS') return undefined;
           return undefined;
         });
@@ -212,8 +186,8 @@ describe('CORS Configuration', () => {
         'https://app.example.com,https://admin.example.com';
 
       beforeEach(() => {
+        process.env.NODE_ENV = 'production';
         mockConfigService.get.mockImplementation((key: string) => {
-          if (key === 'NODE_ENV') return 'production';
           if (key === 'ALLOWED_ORIGINS') return allowedOrigins;
           return undefined;
         });
@@ -243,28 +217,10 @@ describe('CORS Configuration', () => {
       });
     });
 
-    describe('in production mode with ENV=prod', () => {
-      const allowedOrigins = 'https://app.example.com';
-
-      beforeEach(() => {
-        (process.env as { ENV?: string }).ENV = 'prod';
-        mockConfigService.get.mockImplementation((key: string) => {
-          if (key === 'NODE_ENV') return undefined;
-          if (key === 'ALLOWED_ORIGINS') return allowedOrigins;
-          return undefined;
-        });
-      });
-
-      it('should restrict to allowed origins', () => {
-        const config = getGraphQLCorsConfig(mockConfigService);
-        expect(config.origin).toEqual(['https://app.example.com']);
-      });
-    });
-
     describe('in production without ALLOWED_ORIGINS', () => {
       beforeEach(() => {
+        process.env.NODE_ENV = 'production';
         mockConfigService.get.mockImplementation((key: string) => {
-          if (key === 'NODE_ENV') return 'production';
           if (key === 'ALLOWED_ORIGINS') return undefined;
           return undefined;
         });

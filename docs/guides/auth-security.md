@@ -300,6 +300,58 @@ GATEWAY_CLIENT_ID='api-gateway'
 - [ ] No secrets in frontend environment variables
 - [ ] GraphQL depth limiting enabled (default: 10)
 - [ ] GraphQL complexity limiting enabled (default: 1000)
+- [ ] `NODE_ENV=production` (not 'prod' or 'dev')
+
+## Environment Configuration
+
+Consistent environment detection is critical for security features to work correctly.
+
+### Standardized Environment Detection
+
+**Always use the centralized helpers** from `src/config/environment.config.ts`:
+
+```typescript
+import { isProduction, isDevelopment, isTest } from 'src/config/environment.config';
+
+// ✅ Correct - uses centralized helper
+if (isProduction()) {
+  // Enable production security features
+}
+
+// ❌ Incorrect - direct process.env access
+if (process.env.NODE_ENV === 'production') {
+  // May cause inconsistent behavior
+}
+```
+
+### Valid NODE_ENV Values
+
+| Value | Environment | Security Level |
+|-------|-------------|----------------|
+| `production` | Production | Full security |
+| `development` | Development | Relaxed for debugging |
+| `test` | Testing | Mocked externals |
+| `prod` | Legacy (maps to production) | Full security |
+| `dev` | Legacy (maps to development) | Relaxed |
+
+### ESLint Enforcement
+
+An ESLint rule warns against direct `process.env.NODE_ENV` usage:
+
+```
+warning: Use isProduction(), isDevelopment(), or isTest() from 'src/config/environment.config'
+         instead of process.env.NODE_ENV directly. See issue #206.
+```
+
+### Why This Matters
+
+Inconsistent environment checks can cause:
+- Production security features disabled in production
+- Development features enabled in production
+- CORS allowing all origins in production
+- Debug information exposed to users
+
+**See**: [Issue #206](https://github.com/CommonwealthLabsCode/qckstrt/issues/206)
 
 ## GraphQL Query Complexity & Depth Limiting
 
