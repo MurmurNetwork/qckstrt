@@ -52,6 +52,7 @@ import { WebAuthnChallengeEntity } from 'src/db/entities/webauthn-challenge.enti
 import { EmailCorrespondenceEntity } from 'src/db/entities/email-correspondence.entity';
 import { AuditModule } from 'src/common/audit/audit.module';
 import { CaslModule } from 'src/permissions/casl.module';
+import { HealthModule } from 'src/common/health';
 
 @Module({
   imports: [
@@ -98,6 +99,7 @@ import { CaslModule } from 'src/permissions/casl.module';
     ProfileModule,
     ActivityModule,
     EmailDomainModule,
+    HealthModule.forRoot({ serviceName: 'users-service', hasDatabase: true }),
   ],
   providers: SHARED_PROVIDERS,
 })
@@ -108,6 +110,12 @@ export class AppModule implements NestModule {
       // Only requests signed by the gateway are accepted
       // @see https://github.com/CommonwealthLabsCode/qckstrt/issues/185
       .apply(HMACMiddleware, LoggerMiddleware)
+      .exclude(
+        // Health endpoints are excluded from HMAC validation for Kubernetes probes
+        { path: 'health', method: RequestMethod.GET },
+        { path: 'health/live', method: RequestMethod.GET },
+        { path: 'health/ready', method: RequestMethod.GET },
+      )
       .forRoutes({ path: '*', method: RequestMethod.ALL });
   }
 }

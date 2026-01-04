@@ -33,7 +33,7 @@ import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { AuthGuard } from 'src/common/guards/auth.guard';
 import { AllExceptionsFilter } from 'src/common/exceptions/all-exceptions.filter';
 import { HttpExceptionFilter } from 'src/common/exceptions/http-exception.filter';
-import { HealthModule } from './health/health.module';
+import { HealthModule } from 'src/common/health';
 import { HmacSignerService } from 'src/common/services/hmac-signer.service';
 import { HmacRemoteGraphQLDataSource } from './hmac-data-source';
 
@@ -63,7 +63,9 @@ const handleAuth = ({ req, res }: { req: Request; res: Response }) => {
 
 @Module({
   imports: [
-    HealthModule,
+    // Health check endpoints for Kubernetes probes
+    // @see https://github.com/CommonwealthLabsCode/qckstrt/issues/209
+    HealthModule.forRoot({ serviceName: 'api-gateway' }),
     ConfigModule.forRoot({
       load: [
         configuration,
@@ -204,7 +206,13 @@ export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer
       .apply(CsrfMiddleware, AuthMiddleware)
-      .exclude({ path: 'health', method: RequestMethod.GET })
+      // Exclude health check endpoints from auth middleware
+      // @see https://github.com/CommonwealthLabsCode/qckstrt/issues/209
+      .exclude(
+        { path: 'health', method: RequestMethod.GET },
+        { path: 'health/live', method: RequestMethod.GET },
+        { path: 'health/ready', method: RequestMethod.GET },
+      )
       .forRoutes({ path: '*', method: RequestMethod.ALL });
   }
 }

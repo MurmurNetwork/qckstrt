@@ -41,6 +41,7 @@ import { CaslModule } from 'src/permissions/casl.module';
 import { DocumentEntity } from 'src/db/entities/document.entity';
 import { AuditLogEntity } from 'src/db/entities/audit-log.entity';
 import { AuditModule } from 'src/common/audit/audit.module';
+import { HealthModule } from 'src/common/health';
 
 /**
  * Documents App Module
@@ -77,6 +78,10 @@ import { AuditModule } from 'src/common/audit/audit.module';
     }),
     CaslModule.forRoot(),
     DocumentsModule,
+    HealthModule.forRoot({
+      serviceName: 'documents-service',
+      hasDatabase: true,
+    }),
   ],
   providers: SHARED_PROVIDERS,
 })
@@ -87,6 +92,12 @@ export class AppModule implements NestModule {
       // Only requests signed by the gateway are accepted
       // @see https://github.com/CommonwealthLabsCode/qckstrt/issues/185
       .apply(HMACMiddleware, LoggerMiddleware)
+      .exclude(
+        // Health endpoints are excluded from HMAC validation for Kubernetes probes
+        { path: 'health', method: RequestMethod.GET },
+        { path: 'health/live', method: RequestMethod.GET },
+        { path: 'health/ready', method: RequestMethod.GET },
+      )
       .forRoutes({ path: '*', method: RequestMethod.ALL });
   }
 }
