@@ -13,6 +13,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   DeleteDateColumn,
+  Index,
 } from 'typeorm';
 import { AuthStrategy } from 'src/common/enums/auth-strategy.enum';
 
@@ -32,6 +33,7 @@ export class UserEntity extends BaseEntity {
 
   @Field()
   @Column({ type: 'varchar', length: 255, select: true, unique: true })
+  @Index('idx_users_email')
   public email!: string;
 
   @Field({ nullable: true })
