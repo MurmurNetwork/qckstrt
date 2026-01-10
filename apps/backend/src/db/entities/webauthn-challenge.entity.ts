@@ -12,6 +12,7 @@ import {
  * Challenges are single-use and expire after 5 minutes.
  */
 @Entity('webauthn_challenges')
+@Index('idx_webauthn_challenges_lookup', ['identifier', 'type'])
 export class WebAuthnChallengeEntity extends BaseEntity {
   // Email address or anonymous session identifier
   @PrimaryColumn({ type: 'varchar', length: 255 })
