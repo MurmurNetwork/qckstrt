@@ -8,6 +8,7 @@ import {
   UpdateDateColumn,
   OneToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { UserEntity } from './user.entity';
 
@@ -40,9 +41,11 @@ export class UserLoginEntity extends BaseEntity {
 
   // Failed login tracking (for security)
   @Column({ type: 'integer', default: 0 })
+  @Index('idx_user_logins_failed_attempts')
   public failedLoginAttempts!: number;
 
   @Column({ type: 'timestamptz', nullable: true })
+  @Index('idx_user_logins_locked_until')
   public lockedUntil?: Date;
 
   @Field()
